@@ -1,0 +1,14 @@
+{
+  "name": "productstock-wms-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Basic HTML interface connected to the productstock MySQL database through an API",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mysql2": "^3.14.0"
+  }
+}

@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>竹南蔬果冷凍庫存管理系統</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons CDN -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <!-- Google Fonts Inter & Noto Sans TC -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Noto Sans TC", "Inter", "sans-serif"],
+            },
+            colors: {
+              veggie: {
+                50: "#f0fdf4",
+                100: "#dcfce7",
+                500: "#22c55e",
+                600: "#16a34a",
+                700: "#15803d",
+                800: "#166534",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-slate-50 font-sans text-slate-800 min-h-screen flex flex-col">
+    <!-- Top Navigation Header -->
+    <header
+      class="bg-gradient-to-r from-emerald-700 via-veggie-600 to-teal-700 text-white shadow-lg sticky top-0 z-30"
+    >
+      <div
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between"
+      >
+        <div class="flex items-center space-x-3">
+          <button
+            type="button"
+            class="lg:hidden rounded-lg px-3 py-2 hover:bg-white/10"
+            onclick="toggleSidebar(true)"
+            aria-label="開啟導覽選單"
+            aria-controls="appSidebar"
+          >
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="bg-white/20 p-2 rounded-xl backdrop-blur-md">
+            <i class="fa-solid font-bold fa-leaf text-2xl text-emerald-200"></i>
+          </div>
+          <div>
+            <h1 class="text-xl font-bold tracking-wide flex items-center gap-2">
+              竹南蔬果冷凍庫存管理系統
+              <span
+                class="text-xs bg-emerald-800/80 text-emerald-100 px-2.5 py-0.5 rounded-full font-normal border border-emerald-500/30"
+                >蔬果專用版</span
+              >
+            </h1>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            onclick="openModal('addModal')"
+            class="bg-amber-400 hover:bg-amber-500 text-slate-900 font-semibold px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2 text-sm"
+          >
+            <i class="fa-solid fa-plus text-base"></i>
+            <span>新增蔬果進貨</span>
+          </button>
+          <button
+            type="button"
+            onclick="openActionModal(null, 'deduct')"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2 text-sm"
+          >
+            <i class="fa-solid fa-truck-fast text-base"></i>
+            <span>出貨</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div
+      id="sidebarBackdrop"
+      class="fixed inset-0 z-30 hidden bg-slate-950/40 lg:hidden"
+      onclick="toggleSidebar(false)"
+    ></div>
+    <aside
+      id="appSidebar"
+      class="fixed bottom-0 left-0 top-16 z-40 w-64 -translate-x-full border-r border-slate-200 bg-white p-4 shadow-xl transition-transform lg:translate-x-0 lg:shadow-none"
+      aria-label="主要導覽"
+    >
+      <p
+        class="px-3 pb-3 text-xs font-bold uppercase tracking-wider text-slate-400"
+      >
+        倉儲管理
+      </p>
+      <nav class="space-y-1">
+        <a
+          href="/"
+          aria-current="page"
+          class="flex items-center gap-3 rounded-lg bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-800"
+          ><i class="fa-solid fa-boxes-stacked w-5 text-center"></i
+          >商品進銷存總覽</a
+        >
+        <a
+          href="/warehouse.html"
+          class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          ><i class="fa-solid fa-warehouse w-5 text-center"></i>倉儲地圖</a
+        >
+        <a
+          href="/count.html"
+          class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          ><i class="fa-solid fa-clipboard-check w-5 text-center"></i>盤點</a
+        >
+        <a
+          href="/records.html"
+          class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          ><i class="fa-solid fa-clock-rotate-left w-5 text-center"></i>紀錄查詢</a
+        >
+      </nav>
+      <div
+        class="mt-6 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500"
+      >
+        從總覽管理商品與庫存；從地圖查看格位、上架與移庫。
+      </div>
+    </aside>
+
+    <main
+      class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 lg:ml-64 lg:mx-0 lg:w-auto lg:max-w-none"
+    >
+      <!-- Urgent Freshness Warning Banner (Triggers if expiring <= 3 days) -->
+      <div
+        id="urgentAlertBox"
+        class="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-red-500/10 border-l-4 border-amber-500 rounded-r-xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+      >
+        <div class="flex items-start gap-3">
+          <div class="p-2 bg-amber-500 text-white rounded-lg shrink-0 mt-0.5">
+            <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+          </div>
+          <div>
+            <h3
+              class="font-bold text-slate-900 text-base flex items-center gap-2"
+            >
+              效期預警提示專區
+              <span
+                id="urgentBadgeCount"
+                class="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full"
+                >0 項需要注意</span
+              >
+            </h3>
+            <p id="urgentAlertText" class="text-sm text-slate-600 mt-0.5">
+              目前有部分蔬果即將到期或已過期，請優先安排促銷出清或報廢處理。
+            </p>
+          </div>
+        </div>
+        <button
+          onclick="filterStatus('expiring')"
+          class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white font-medium px-3.5 py-1.5 rounded-lg text-sm transition shadow-sm flex items-center gap-1.5"
+        >
+          <i class="fa-solid fa-filter"></i>
+          查看預警品項
+        </button>
+      </div>
+
+      <!-- Metric Cards Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <!-- Total Produce Count -->
+        <div
+          class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex items-center justify-between"
+        >
+          <div>
+            <p
+              class="text-xs font-medium text-slate-500 uppercase tracking-wider"
+            >
+              在庫蔬果品項
+            </p>
+            <h3
+              id="statTotalItems"
+              class="text-2xl font-extrabold text-slate-800 mt-1"
+            >
+              0 <span class="text-xs font-normal text-slate-500">項</span>
+            </h3>
+          </div>
+          <div
+            class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl"
+          >
+            <i class="fa-solid fa-boxes-stacked"></i>
+          </div>
+        </div>
+
+        <!-- Expiring Soon Warning -->
+        <div
+          class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex items-center justify-between"
+        >
+          <div>
+            <p
+              class="text-xs font-medium text-slate-500 uppercase tracking-wider"
+            >
+              即將到期 (≤3天)
+            </p>
+            <h3
+              id="statExpiringCount"
+              class="text-2xl font-extrabold text-amber-600 mt-1"
+            >
+              0 <span class="text-xs font-normal text-slate-500">項</span>
+            </h3>
+          </div>
+          <div
+            class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl"
+          >
+            <i class="fa-solid fa-clock"></i>
+          </div>
+        </div>
+
+        <!-- Expired Alert -->
+        <div
+          class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex items-center justify-between"
+        >
+          <div>
+            <p
+              class="text-xs font-medium text-slate-500 uppercase tracking-wider"
+            >
+              已過期品項
+            </p>
+            <h3
+              id="statExpiredCount"
+              class="text-2xl font-extrabold text-rose-600 mt-1"
+            >
+              0 <span class="text-xs font-normal text-slate-500">項</span>
+            </h3>
+          </div>
+          <div
+            class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl"
+          >
+            <i class="fa-solid fa-calendar-xmark"></i>
+          </div>
+        </div>
+
+        <!-- Total Quantity Weight / Units -->
+        <div
+          class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex items-center justify-between"
+        >
+          <div>
+            <p
+              class="text-xs font-medium text-slate-500 uppercase tracking-wider"
+            >
+              總計庫存總量
+            </p>
+            <h3
+              id="statTotalQty"
+              class="text-2xl font-extrabold text-teal-600 mt-1"
+            >
+              0 <span class="text-xs font-normal text-slate-500">單位</span>
+            </h3>
+          </div>
+          <div
+            class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-xl"
+          >
+            <i class="fa-solid fa-weight-hanging"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls & Filters Section -->
+      <div
+        class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4"
+      >
+        <!-- Row 1: Search & Dropdown Filters -->
+        <div
+          class="flex flex-col md:flex-row gap-3 items-center justify-between"
+        >
+          <!-- Search Input -->
+          <div class="relative w-full md:w-80">
+            <i
+              class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"
+            ></i>
+            <input
+              type="text"
+              id="searchInput"
+              oninput="applyFilters()"
+              placeholder="搜尋蔬果名稱、產地、供應商..."
+              class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+            />
+          </div>
+
+          <!-- Dropdown Selectors -->
+          <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <!-- Status Filter Dropdown -->
+            <select
+              id="statusSelect"
+              onchange="applyFilters()"
+              class="border border-slate-300 rounded-lg text-sm px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+            >
+              <option value="all">所有效期狀態</option>
+              <option value="fresh">🟢 新鮮正常 (>3天)</option>
+              <option value="expiring">🟡 即將到期 (≤3天)</option>
+              <option value="expired">🔴 已過期 (≤0天)</option>
+            </select>
+
+          </div>
+        </div>
+
+        <!-- Row 2: Category Filter Pills -->
+        <div
+          class="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100 scrollbar-thin"
+        >
+          <span class="text-xs font-semibold text-slate-400 shrink-0 mr-1"
+            >蔬果分類：</span
+          >
+          <button
+            onclick="selectCategory('all')"
+            class="category-btn active bg-emerald-600 text-white px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="all"
+          >
+            全部
+          </button>
+          <button
+            onclick="selectCategory('葉菜類')"
+            class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="葉菜類"
+          >
+            🥬 葉菜類
+          </button>
+          <button
+            onclick="selectCategory('根莖類')"
+            class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="根莖類"
+          >
+            🥕 根莖類
+          </button>
+          <button
+            onclick="selectCategory('水果類')"
+            class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="水果類"
+          >
+            🍅 水果類
+          </button>
+          <button
+            onclick="selectCategory('菌菇類')"
+            class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="菌菇類"
+          >
+            🍄 菌菇類
+          </button>
+
+          <button
+            onclick="selectCategory('香辛調味')"
+            class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="香辛調味"
+          >
+            🧄 香辛調味
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Inventory Table Card -->
+      <div
+        class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
+      >
+        <div
+          class="px-6 py-4 border-b border-slate-100 flex items-center justify-between"
+        >
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 class="font-bold text-slate-800 text-base flex items-center gap-2">
+              <i class="fa-solid fa-list-check text-emerald-600"></i>
+              生鮮庫存清單
+            </h2>
+            <button id="openWarehouseOverview" type="button" class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">
+              <i class="fa-solid fa-map-location-dot mr-1"></i>查看倉儲位置
+            </button>
+          </div>
+          <span id="resultsCount" class="text-xs text-slate-500">共顯示 0 筆資料</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead
+              class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200"
+            >
+              <tr>
+                <th class="py-3 px-4" data-sort-header="name" aria-sort="none"><button type="button" data-sort-key="name" class="inline-flex items-center gap-1 hover:text-emerald-700">蔬果品名 / 分類<i data-sort-icon="name" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4" data-sort-header="supplier" aria-sort="none"><button type="button" data-sort-key="supplier" class="inline-flex items-center gap-1 hover:text-emerald-700">供應商<i data-sort-icon="supplier" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4" data-sort-header="inboundDate" aria-sort="none"><button type="button" data-sort-key="inboundDate" class="inline-flex items-center gap-1 hover:text-emerald-700">進貨日期<i data-sort-icon="inboundDate" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4" data-sort-header="receivedAt" aria-sort="none"><button type="button" data-sort-key="receivedAt" class="inline-flex items-center gap-1 hover:text-emerald-700">紀錄時間<i data-sort-icon="receivedAt" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4" data-sort-header="expiry" aria-sort="ascending"><button type="button" data-sort-key="expiry" class="inline-flex items-center gap-1 hover:text-emerald-700">保存到期日 (剩餘天數)<i data-sort-icon="expiry" class="fa-solid fa-arrow-up text-emerald-700" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4 text-right" data-sort-header="qty" aria-sort="none"><button type="button" data-sort-key="qty" class="inline-flex items-center gap-1 hover:text-emerald-700">當前庫存<i data-sort-icon="qty" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4 text-right" data-sort-header="unitCost" aria-sort="none"><button type="button" data-sort-key="unitCost" class="inline-flex items-center gap-1 hover:text-emerald-700">每公斤成本<i data-sort-icon="unitCost" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4 text-center" data-sort-header="status" aria-sort="none"><button type="button" data-sort-key="status" class="inline-flex items-center gap-1 hover:text-emerald-700">狀態<i data-sort-icon="status" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTableBody" class="divide-y divide-slate-100">
+              <!-- Dynamic content will be rendered here -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Empty State Placeholder -->
+        <div id="emptyState" class="hidden p-12 text-center">
+          <div
+            class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400 text-2xl"
+          >
+            <i class="fa-solid fa-basket-shopping"></i>
+          </div>
+          <h3 class="font-bold text-slate-700 text-base">
+            未找到符合條件的蔬果
+          </h3>
+          <p class="text-slate-500 text-sm mt-1">
+            請嘗試調整搜尋關鍵字或篩選條件。
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal: Warehouse Location Overview -->
+    <dialog id="warehouseOverviewModal" class="m-auto h-[94vh] w-[96vw] max-w-[1440px] overflow-hidden rounded-2xl p-0 shadow-2xl backdrop:bg-slate-950/60">
+      <div class="flex h-full min-h-0 flex-col bg-slate-50">
+        <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3 sm:px-6">
+          <div class="flex items-center gap-3">
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><i class="fa-solid fa-map-location-dot"></i></span>
+            <div><h2 class="font-bold text-slate-900">商品倉儲位置</h2><p id="warehouseOverviewSubtitle" class="text-xs text-slate-500">快速查看商品所在倉庫與格位</p></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-semibold text-slate-600">倉庫
+              <select id="overviewWarehouseSelect" class="ml-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"></select>
+            </label>
+            <button id="closeWarehouseOverview" type="button" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="關閉倉儲位置視窗"><i class="fa-solid fa-xmark text-lg"></i></button>
+          </div>
+        </header>
+        <div class="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,0.8fr)] lg:grid-cols-[3fr_2fr] lg:grid-rows-1">
+          <section class="min-h-0 overflow-y-auto border-b border-slate-200 p-4 sm:p-5 lg:border-b-0 lg:border-r" aria-label="倉庫格位地圖">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div><h3 id="overviewMapHeading" class="font-bold text-slate-800">倉庫格位總覽</h3><p id="overviewMapSummary" class="mt-0.5 text-xs text-slate-500"></p></div>
+              <div class="flex gap-3 text-xs text-slate-500"><span><i class="fa-solid fa-square mr-1 text-emerald-500"></i>有庫存</span><span><i class="fa-solid fa-square mr-1 text-slate-300"></i>空格位</span></div>
+            </div>
+            <div id="overviewMapLoading" class="py-12 text-center text-sm text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>載入倉儲地圖…</div>
+            <div id="overviewMapEmpty" class="hidden rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">此倉庫尚未建立格位。</div>
+            <div id="overviewMapZones" class="space-y-5"></div>
+          </section>
+          <aside class="flex min-h-0 flex-col overflow-hidden bg-white" aria-label="倉庫與區域清單">
+            <div class="border-b border-slate-100 p-4 sm:p-5">
+              <h3 class="font-bold text-slate-800">倉庫與區域</h3>
+              <p class="mt-1 text-xs text-slate-500">選擇區域可跳到左側地圖；點格位可查看詳細資料。</p>
+              <div id="overviewLocationDetails" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">滑過或點選地圖格位查看商品位置。</div>
+            </div>
+            <div id="overviewZoneList" class="min-h-0 flex-1 space-y-2 overflow-y-auto p-4 sm:p-5"></div>
+          </aside>
+        </div>
+      </div>
+      <div id="overviewMapTooltip" class="pointer-events-none fixed z-[100] hidden max-w-xs whitespace-pre-line rounded-lg bg-slate-950 px-3 py-2 text-xs leading-5 text-white shadow-xl"></div>
+    </dialog>
+
+    <!-- Modal: Add New Produce (新增進貨) -->
+    <div
+      id="addModal"
+      class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200"
+    >
+      <div
+        class="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] mx-4 overflow-hidden flex flex-col transform transition-all scale-95 duration-200"
+        id="addModalContent"
+      >
+        <div
+          class="bg-gradient-to-r from-emerald-700 to-teal-700 px-5 py-3 text-white flex justify-between items-center shrink-0"
+        >
+          <h3 class="font-bold text-lg flex items-center gap-2">
+            <i class="fa-solid fa-cart-flatbed"></i>
+            登錄蔬果進貨
+          </h3>
+          <button
+            onclick="closeModal('addModal')"
+            class="text-white/80 hover:text-white text-xl"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <form
+          id="addForm"
+          onsubmit="handleAddSubmit(event)"
+          class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 space-y-3"
+        >
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <!-- Name -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1"
+                >蔬果名稱 <span class="text-red-500">*</span></label
+              >
+              <input
+                type="text"
+                id="addName"
+                required
+                placeholder="例如：有機牛番茄、有機高麗菜"
+                class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+
+            <!-- Category -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1"
+                >蔬果分類 <span class="text-red-500">*</span></label
+              >
+              <select
+                id="addCategory"
+                required
+                class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              >
+                <option value="葉菜類">🥬 葉菜類</option>
+                <option value="根莖類">🥕 根莖類</option>
+                <option value="水果類">🍅 水果類</option>
+                <option value="菌菇類">🍄 菌菇類</option>
+                <option value="香辛調味">🧄 香辛調味</option>
+              </select>
+            </div>
+
+            <!-- Origin / Supplier -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1"
+                >供應商名稱</label
+              >
+              <input
+                type="text"
+                id="addOrigin"
+                placeholder="請輸入供應商名稱"
+                class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+
+            <!-- Inbound Date -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1"
+                >進貨日期 <span class="text-red-500">*</span></label
+              >
+              <input
+                type="date"
+                id="addInboundDate"
+                required
+                class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+
+            <!-- Expiry Date -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1"
+                >保存期限 (到期日) <span class="text-red-500">*</span></label
+              >
+              <input
+                type="date"
+                id="addExpiryDate"
+                required
+                class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1"
+                >進貨單位 <span class="text-red-500">*</span></label
+              >
+              <select id="addInputUnit" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                <option value="kg">公斤 (kg)</option><option value="箱">箱</option><option value="台斤">台斤</option><option value="包">包</option><option value="顆">顆 / 個</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">進貨數量 <span class="text-red-500">*</span></label>
+              <input type="number" id="addInputQuantity" step="0.001" min="0.001" value="1" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">每單位換算公斤 <span class="text-red-500">*</span></label>
+              <input type="number" id="addKgPerUnit" step="0.0001" min="0.0001" value="1" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+              <p class="mt-1 text-xs text-slate-500">例如：1 箱 = 10 kg，請填 10。</p>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">換算依據 <span class="text-red-500">*</span></label>
+              <select id="addConversionSource" required class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                <option value="SIMULATION_ASSUMPTION">模擬假設</option><option value="PUBLIC_STANDARD">公開標準</option>
+              </select>
+            </div>
+            <div class="sm:col-span-2 lg:col-span-3">
+              <label class="block text-xs font-semibold text-slate-700 mb-1">換算說明 <span class="text-red-500">*</span></label>
+              <input type="text" id="addConversionNote" required value="模擬作業假設，請填寫此商品的換算依據" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+              <p class="mt-1 text-xs text-slate-500">同一商品的同一單位首次設定後會固定沿用；公開資料請註明來源。</p>
+            </div>
+            <p class="sm:col-span-2 lg:col-span-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">本次入庫總重：<span id="addTotalKg">1.00</span> kg</p>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1"
+                >每公斤成本 <span class="text-red-500">*</span></label
+              >
+              <input
+                type="number"
+                id="addUnitCost"
+                step="0.01"
+                min="0"
+                value="0"
+                required
+                class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+
+          </div>
+
+          <div class="sticky bottom-0 bg-white pt-3 flex justify-end gap-3 border-t border-slate-100">
+            <button
+              type="button"
+              onclick="closeModal('addModal')"
+              class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              class="px-5 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-md transition"
+            >
+              確認進貨入庫
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Stock Out / Loss Report (出庫 / 報廢) -->
+    <div
+      id="actionModal"
+      class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200"
+    >
+      <div
+        class="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] mx-4 overflow-hidden flex flex-col transform transition-all scale-95 duration-200"
+      >
+        <div
+          class="bg-slate-800 px-6 py-4 text-white flex justify-between items-center"
+        >
+          <h3 id="actionModalTitle" class="font-bold text-lg">庫存異動作業</h3>
+          <button
+            onclick="closeModal('actionModal')"
+            class="text-white/80 hover:text-white text-xl"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <form
+          id="actionForm"
+          onsubmit="handleActionSubmit(event)"
+          class="min-h-0 overflow-y-auto p-4 sm:p-5 space-y-3"
+        >
+          <input type="hidden" id="actionItemId" />
+          <input type="hidden" id="actionType" />
+
+          <div id="outboundProductPicker" class="hidden space-y-3">
+            <div>
+              <label for="outboundProductSelect" class="block text-xs font-semibold text-slate-700 mb-1">選擇產品名稱</label>
+              <select id="outboundProductSelect" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></select>
+            </div>
+            <div>
+              <p class="mb-1 text-xs font-semibold text-slate-700">選擇出貨庫存與倉儲位置</p>
+              <div id="outboundBatchList" class="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2" role="listbox" aria-label="產品批次與倉儲位置"></div>
+            </div>
+          </div>
+
+          <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <p id="actionItemCaption" class="text-xs text-slate-500">當前品項：</p>
+            <p
+              id="actionItemName"
+              class="font-bold text-slate-800 text-base mt-0.5"
+            >
+              --
+            </p>
+            <p id="actionCurrentQty" class="text-xs text-slate-600 mt-1">
+              目前庫存：--
+            </p>
+          </div>
+
+          <div>
+            <label
+              id="actionQtyLabel"
+              class="block text-xs font-semibold text-slate-700 mb-1"
+              >數量</label
+            >
+            <input
+              type="number"
+              id="actionQtyInput"
+              step="0.1"
+              min="0.1"
+              required
+              class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1"
+              >備註原因</label
+            >
+            <input
+              type="text"
+              id="actionNoteInput"
+              placeholder="例如：門市銷售出清、發霉損耗報廢"
+              class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+
+          <div class="sticky bottom-0 bg-white pt-3 flex justify-end gap-3 border-t border-slate-100">
+            <button
+              type="button"
+              onclick="closeModal('actionModal')"
+              class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              id="actionSubmitBtn"
+              class="px-5 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-md transition"
+            >
+              送出登記
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Notification Toast Notification -->
+    <div
+      id="toast"
+      class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-3 transition-all duration-300 translate-y-20 opacity-0"
+    >
+      <i
+        id="toastIcon"
+        class="fa-solid fa-circle-check text-emerald-400 text-lg"
+      ></i>
+      <span id="toastMessage" class="text-sm font-medium">通知訊息</span>
+    </div>
+
+    <script src="/navigation.js" defer></script>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

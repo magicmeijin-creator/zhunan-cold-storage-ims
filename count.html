@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>庫存盤點 | 蔬果庫存管理系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>body{font-family:'Noto Sans TC',sans-serif}</style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <header class="sticky top-0 z-20 bg-emerald-800 text-white shadow">
+    <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:ml-64 lg:max-w-none">
+      <div class="flex items-center gap-3">
+        <button type="button" class="rounded-lg px-3 py-2 hover:bg-white/10 lg:hidden" onclick="toggleSidebar(true)" aria-label="開啟導覽選單" aria-controls="appSidebar"><i class="fa-solid fa-bars"></i></button>
+        <div><h1 class="text-xl font-bold"><i class="fa-solid fa-clipboard-check mr-2 text-emerald-200"></i>庫存盤點</h1><p class="text-xs text-emerald-100">按區域逐格盤點，確認差異後記錄庫存調整</p></div>
+      </div>
+      <span class="hidden text-sm text-emerald-100 sm:block">生鮮蔬果管理系統</span>
+    </div>
+  </header>
+  <div id="sidebarBackdrop" class="fixed inset-0 z-30 hidden bg-slate-950/40 lg:hidden" onclick="toggleSidebar(false)"></div>
+  <aside id="appSidebar" class="fixed bottom-0 left-0 top-16 z-40 w-64 -translate-x-full border-r border-slate-200 bg-white p-4 shadow-xl transition-transform lg:translate-x-0 lg:shadow-none" aria-label="主要導覽">
+    <p class="px-3 pb-3 text-xs font-bold uppercase tracking-wider text-slate-400">倉儲管理</p>
+    <nav class="space-y-1">
+      <a href="/" class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"><i class="fa-solid fa-boxes-stacked w-5 text-center"></i>商品進銷存總覽</a>
+      <a href="/warehouse.html" class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"><i class="fa-solid fa-warehouse w-5 text-center"></i>倉儲地圖</a>
+      <a href="/count.html" aria-current="page" class="flex items-center gap-3 rounded-lg bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-800"><i class="fa-solid fa-clipboard-check w-5 text-center"></i>盤點</a>
+      <a href="/records.html" class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"><i class="fa-solid fa-clock-rotate-left w-5 text-center"></i>紀錄查詢</a>
+    </nav>
+    <div class="mt-6 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">盤點期間會暫停該區的上架、移庫及相關出庫；完成或取消盤點後恢復作業。</div>
+  </aside>
+
+  <main class="mx-auto max-w-7xl space-y-5 px-4 py-6 lg:ml-64 lg:mx-0 lg:max-w-none">
+    <section class="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 class="font-bold">開始區域盤點</h2>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+          <label class="text-xs font-semibold text-slate-600">倉庫<select id="warehouseSelect" class="mt-1 w-full rounded-lg border border-slate-300 p-2.5 text-sm"></select></label>
+          <label class="text-xs font-semibold text-slate-600">區域<select id="zoneSelect" class="mt-1 w-full rounded-lg border border-slate-300 p-2.5 text-sm"></select></label>
+        </div>
+        <button id="startCountButton" type="button" class="mt-3 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"><i class="fa-solid fa-play mr-1"></i>建立盤點單</button>
+        <p class="mt-3 text-xs leading-5 text-slate-500">盤點時先記錄現場看到的批次和數量；輸入時不會顯示帳面數。必須完成區域內全部格位，才能檢視差異。</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 class="font-bold">盤點紀錄</h2>
+        <label class="mt-3 block text-xs font-semibold text-slate-600">選擇近期盤點單
+          <select id="historySelect" class="mt-1 w-full rounded-lg border border-slate-300 p-2.5 text-sm"><option value="">尚無盤點紀錄</option></select>
+        </label>
+        <p class="mt-3 text-xs text-slate-500">同一倉庫區域一次只能進行一張盤點單。</p>
+      </div>
+    </section>
+
+    <section id="sessionPanel" class="hidden space-y-4">
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div><div class="flex flex-wrap items-center gap-2"><h2 id="sessionTitle" class="font-bold"></h2><span id="sessionStatus" class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800"></span></div><p id="sessionCreated" class="mt-1 text-xs text-slate-500"></p></div>
+          <button id="cancelCountButton" type="button" class="hidden rounded-lg border border-rose-200 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50">取消這張盤點單</button>
+        </div>
+        <div class="mt-4"><div class="mb-1 flex justify-between text-xs text-slate-500"><span>盤點進度</span><span id="progressText"></span></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div id="progressBar" class="h-full rounded-full bg-emerald-600 transition-all"></div></div><p class="mt-2 text-xs text-slate-500">完成所有格位後，才能更新此倉庫區域的庫存狀況。</p></div>
+      </div>
+
+      <div id="countingPanel" class="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3"><div><h3 class="font-bold">逐格盤點</h3><p class="text-xs text-slate-500">請到現場核對格位內容；空格也要記錄為「無庫存、數量 0」。</p></div><button id="updateWarehouseButton" type="button" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50" disabled>更新倉儲狀況</button></div>
+        <div class="overflow-x-auto"><table class="w-full min-w-[650px] text-left text-sm"><thead class="bg-slate-50 text-xs text-slate-500"><tr><th class="px-4 py-3">格位</th><th class="px-4 py-3">實盤狀態</th><th class="px-4 py-3 text-right">操作</th></tr></thead><tbody id="countLinesBody" class="divide-y divide-slate-100"></tbody></table></div>
+      </div>
+
+      <div id="reviewPanel" class="hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4"><div><h3 class="font-bold">盤點差異確認</h3><p class="text-xs text-slate-500">以下為帳面與實盤的差異；更新後會同步調整庫存與倉儲地圖，並保留異動紀錄。</p></div><div class="flex gap-2"><button id="reopenButton" type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">返回修改</button><button id="applyButton" type="button" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">更新倉儲狀況</button></div></div>
+        <div class="overflow-x-auto"><table class="w-full min-w-[900px] text-left text-sm"><thead class="bg-slate-50 text-xs text-slate-500"><tr><th class="px-4 py-3">格位</th><th class="px-4 py-3">帳面商品／批次</th><th class="px-4 py-3 text-right">帳面數</th><th class="px-4 py-3">實盤商品／批次</th><th class="px-4 py-3 text-right">實盤數</th><th class="px-4 py-3">差異／原因</th></tr></thead><tbody id="reviewLinesBody" class="divide-y divide-slate-100"></tbody></table></div>
+        <p id="reviewSummary" class="border-t border-slate-100 px-4 py-3 text-sm font-semibold"></p>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="countLineDialog" class="w-[min(92vw,480px)] rounded-2xl p-0 shadow-xl backdrop:bg-slate-900/50">
+    <form id="countLineForm" class="space-y-4 p-5">
+      <div class="flex items-center justify-between"><h2 class="font-bold">記錄實盤結果</h2><button type="button" class="text-xl text-slate-500" onclick="closeCountDialog()" aria-label="關閉">×</button></div>
+      <p id="countLineLocation" class="rounded-lg bg-slate-50 p-3 text-sm font-semibold text-slate-700"></p>
+      <label class="block text-sm">現場看到的商品批次<select id="countedBatchSelect" class="mt-1 w-full rounded-lg border border-slate-300 p-2.5" required></select></label>
+      <label id="countedQuantityField" class="block text-sm">實際數量（公斤）<input id="countedQuantity" type="number" min="0" step="0.01" value="0" class="mt-1 w-full rounded-lg border border-slate-300 p-2.5" required></label>
+      <div id="countedBoxFields" class="hidden grid grid-cols-2 gap-3">
+        <label class="block text-sm">箱數<input id="countedBoxCount" type="number" min="0" step="1" value="0" class="mt-1 w-full rounded-lg border border-slate-300 p-2.5"></label>
+        <label class="block text-sm">散裝公斤<input id="countedLooseKg" type="number" min="0" step="0.01" value="0" class="mt-1 w-full rounded-lg border border-slate-300 p-2.5"></label>
+        <p class="col-span-2 text-sm font-semibold text-emerald-800">換算總重：<span id="countedTotalKg">0.00</span> kg <span id="countedBoxWeightLabel" class="font-normal text-slate-500"></span></p>
+      </div>
+      <label class="block text-sm">差異原因（若與帳面不同必填）<input id="varianceReason" maxlength="255" class="mt-1 w-full rounded-lg border border-slate-300 p-2.5" placeholder="例如：出庫漏登、商品放錯格位"></label>
+      <p class="text-xs text-slate-500">沒有庫存時請選「無庫存」並輸入 0。若現場批次不在清單中，請先退出盤點，新增或修正批次資料。</p>
+      <div class="flex justify-end gap-2"><button type="button" class="rounded-lg px-4 py-2 text-sm" onclick="closeCountDialog()">取消</button><button class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">儲存實盤</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="fixed bottom-5 right-5 hidden max-w-sm rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl" role="status"></div>
+  <script src="/navigation.js" defer></script>
+  <script src="/count.js" defer></script>
+</body>
+</html>
