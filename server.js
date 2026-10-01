@@ -63,7 +63,14 @@ app.get("/api/inventory", async (_req, res, next) => {
              p.product_name AS name, p.category, p.unit, s.supplier_name AS origin,
              b.received_date AS inboundDate, b.created_at AS receivedAt,
              b.expiry_date AS expiryDate,
-             b.quantity AS qty, b.unit_cost AS unitCostPerKg, b.status,
+             b.quantity AS onHandQty,
+             GREATEST(0, b.quantity - COALESCE((
+               SELECT SUM(o.quantity) FROM outbound_orders o
+               WHERE o.batch_id = b.batch_id AND o.status = 'WAITING_PICK'
+             ), 0)) AS qty,
+             COALESCE((SELECT SUM(o.quantity) FROM outbound_orders o
+               WHERE o.batch_id = b.batch_id AND o.status = 'WAITING_PICK'), 0) AS reservedQty,
+             b.unit_cost AS unitCostPerKg, b.status,
              poi.input_quantity, poi.input_unit,
              poi.kg_per_unit
       FROM inventory_batches b
@@ -86,15 +93,233 @@ app.get("/api/batches/:id/locations", async (req, res, next) => {
     return next(badRequest("批次編號不正確。"));
   try {
     const [rows] = await pool.execute(
-      `SELECT w.warehouse_name, l.zone_code, l.location_code, bl.quantity
+      `SELECT w.warehouse_name, l.zone_code, l.location_code,
+              bl.quantity AS stored_quantity,
+              COALESCE(SUM(CASE WHEN o.status = 'WAITING_PICK' THEN oa.quantity ELSE 0 END), 0) AS reserved_quantity,
+              bl.quantity - COALESCE(SUM(CASE WHEN o.status = 'WAITING_PICK' THEN oa.quantity ELSE 0 END), 0) AS quantity
        FROM batch_locations bl
        JOIN warehouse_locations l ON l.location_id = bl.location_id AND l.is_active = TRUE
        JOIN warehouses w ON w.warehouse_id = l.warehouse_id
+       LEFT JOIN outbound_order_allocations oa ON oa.location_id = bl.location_id
+       LEFT JOIN outbound_orders o ON o.outbound_order_id = oa.outbound_order_id
        WHERE bl.batch_id = ?
-       ORDER BY w.warehouse_name, l.zone_code, l.row_no, l.column_no`,
+       GROUP BY bl.location_id, w.warehouse_name, l.zone_code, l.location_code, l.row_no, l.column_no, bl.quantity
+       HAVING quantity > 0
+       ORDER BY l.location_id`,
       [batchId],
     );
     res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/outbound-orders", async (req, res, next) => {
+  const status = String(req.query.status || "ALL");
+  const allowed = new Set(["ALL", "WAITING_PICK", "COMPLETED", "CANCELLED"]);
+  if (!allowed.has(status)) return next(badRequest("出貨單狀態不正確。"));
+  try {
+    const [rows] = await pool.execute(
+      `SELECT o.outbound_order_id, o.outbound_no, o.product_id, o.batch_id,
+              o.quantity, o.status, o.remark, o.created_at, o.completed_at, o.cancelled_at,
+              p.product_name, p.unit, b.batch_no,
+              GROUP_CONCAT(
+                CONCAT(w.warehouse_name, ' · ', l.zone_code, '區 · ', l.location_code,
+                       ' × ', CAST(a.quantity AS CHAR), ' ', p.unit)
+                ORDER BY a.allocation_id SEPARATOR '；'
+              ) AS pick_locations
+       FROM outbound_orders o
+       JOIN products p ON p.product_id = o.product_id
+       JOIN inventory_batches b ON b.batch_id = o.batch_id
+       LEFT JOIN outbound_order_allocations a ON a.outbound_order_id = o.outbound_order_id
+       LEFT JOIN warehouse_locations l ON l.location_id = a.location_id
+       LEFT JOIN warehouses w ON w.warehouse_id = l.warehouse_id
+       WHERE (? = 'ALL' OR o.status = ?)
+       GROUP BY o.outbound_order_id, o.outbound_no, o.product_id, o.batch_id,
+                o.quantity, o.status, o.remark, o.created_at, o.completed_at, o.cancelled_at,
+                p.product_name, p.unit, b.batch_no
+       ORDER BY CASE o.status WHEN 'WAITING_PICK' THEN 0 WHEN 'COMPLETED' THEN 1 ELSE 2 END,
+                o.created_at DESC, o.outbound_order_id DESC
+       LIMIT 300`,
+      [status, status],
+    );
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/outbound-orders", async (req, res, next) => {
+  const batchId = Number(req.body.batchId);
+  const quantity = Number(req.body.quantity);
+  const remark = String(req.body.remark || "").trim().slice(0, 255);
+  if (
+    !Number.isInteger(batchId) || batchId < 1 ||
+    !Number.isFinite(quantity) || quantity <= 0 ||
+    Math.abs(quantity * 100 - Math.round(quantity * 100)) > 0.000001
+  ) return next(badRequest("請選擇有效批次，並輸入最多兩位小數的出貨數量。"));
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [batches] = await connection.execute(
+      `SELECT b.batch_id, b.product_id, b.quantity, b.status
+       FROM inventory_batches b WHERE b.batch_id = ? FOR UPDATE`,
+      [batchId],
+    );
+    if (!batches.length || batches[0].status !== "AVAILABLE")
+      throw badRequest("找不到可建立出貨單的庫存批次。");
+    const batch = batches[0];
+    const [reservedRows] = await connection.execute(
+      `SELECT COALESCE(SUM(quantity), 0) AS reserved_quantity
+       FROM outbound_orders WHERE batch_id = ? AND status = 'WAITING_PICK'`,
+      [batchId],
+    );
+    const freeBatchQuantity = Number(batch.quantity) - Number(reservedRows[0].reserved_quantity);
+    if (quantity > freeBatchQuantity + 0.000001)
+      throw conflict(`可建立出貨單的剩餘數量為 ${Math.max(0, freeBatchQuantity)}，請重新確認。`);
+
+    const [placements] = await connection.execute(
+      `SELECT bl.location_id, bl.quantity, l.warehouse_id, l.zone_code
+       FROM batch_locations bl
+       JOIN warehouse_locations l ON l.location_id = bl.location_id AND l.is_active = TRUE
+       WHERE bl.batch_id = ? ORDER BY l.location_id FOR UPDATE`,
+      [batchId],
+    );
+    const [reservedLocations] = await connection.execute(
+      `SELECT a.location_id, SUM(a.quantity) AS reserved_quantity
+       FROM outbound_order_allocations a
+       JOIN outbound_orders o ON o.outbound_order_id = a.outbound_order_id
+       WHERE o.batch_id = ? AND o.status = 'WAITING_PICK'
+       GROUP BY a.location_id`,
+      [batchId],
+    );
+    const reservedByLocation = new Map(
+      reservedLocations.map((row) => [Number(row.location_id), Number(row.reserved_quantity)]),
+    );
+    let remaining = quantity;
+    const allocations = [];
+    for (const placement of placements) {
+      const freeAtLocation = Number(placement.quantity) - (reservedByLocation.get(Number(placement.location_id)) || 0);
+      if (freeAtLocation <= 0.000001) continue;
+      const allocated = Math.min(freeAtLocation, remaining);
+      await assertZoneNotCountLocked(connection, placement.warehouse_id, placement.zone_code);
+      allocations.push({ locationId: placement.location_id, quantity: allocated });
+      remaining -= allocated;
+      if (remaining <= 0.000001) break;
+    }
+    if (remaining > 0.000001)
+      throw conflict("可建立出貨單的庫存尚未全部配置到倉儲格位，請先完成上架或調整出貨數量。");
+
+    const outboundNo = `SO${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(0, 30);
+    const [inserted] = await connection.execute(
+      `INSERT INTO outbound_orders (outbound_no, product_id, batch_id, quantity, status, remark)
+       VALUES (?, ?, ?, ?, 'WAITING_PICK', ?)`,
+      [outboundNo, batch.product_id, batchId, quantity, remark || null],
+    );
+    for (const allocation of allocations) {
+      await connection.execute(
+        `INSERT INTO outbound_order_allocations (outbound_order_id, location_id, quantity)
+         VALUES (?, ?, ?)`,
+        [inserted.insertId, allocation.locationId, allocation.quantity],
+      );
+    }
+    await connection.commit();
+    res.status(201).json({ ok: true, outboundOrderId: inserted.insertId, outboundNo });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    next(error);
+  } finally {
+    connection?.release();
+  }
+});
+
+app.post("/api/outbound-orders/:id/complete", async (req, res, next) => {
+  const orderId = Number(req.params.id);
+  if (!Number.isInteger(orderId) || orderId < 1) return next(badRequest("出貨單編號不正確。"));
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [orders] = await connection.execute(
+      "SELECT * FROM outbound_orders WHERE outbound_order_id = ? FOR UPDATE",
+      [orderId],
+    );
+    if (!orders.length) throw badRequest("找不到這張出貨單。");
+    const order = orders[0];
+    if (order.status !== "WAITING_PICK") throw conflict("只有待揀貨的出貨單可以確認完成。");
+    const [batches] = await connection.execute(
+      "SELECT quantity, status FROM inventory_batches WHERE batch_id = ? FOR UPDATE",
+      [order.batch_id],
+    );
+    if (!batches.length || Number(batches[0].quantity) + 0.000001 < Number(order.quantity))
+      throw conflict("批次現有庫存不足，無法完成這張出貨單。");
+    const [allocations] = await connection.execute(
+      `SELECT a.location_id, a.quantity, l.warehouse_id, l.zone_code, l.location_code
+       FROM outbound_order_allocations a
+       JOIN warehouse_locations l ON l.location_id = a.location_id
+       WHERE a.outbound_order_id = ? ORDER BY a.allocation_id FOR UPDATE`,
+      [orderId],
+    );
+    const allocatedTotal = allocations.reduce((sum, row) => sum + Number(row.quantity), 0);
+    if (Math.abs(allocatedTotal - Number(order.quantity)) > 0.000001)
+      throw conflict("出貨單的格位分配數量不完整，請先取消並重新建立出貨單。");
+    for (const allocation of allocations) {
+      await assertZoneNotCountLocked(connection, allocation.warehouse_id, allocation.zone_code);
+      const [stock] = await connection.execute(
+        "SELECT batch_id, quantity FROM batch_locations WHERE location_id = ? FOR UPDATE",
+        [allocation.location_id],
+      );
+      if (!stock.length || Number(stock[0].batch_id) !== Number(order.batch_id) || Number(stock[0].quantity) + 0.000001 < Number(allocation.quantity))
+        throw conflict(`格位 ${allocation.location_code} 的實際帳面數量已變動，請取消並重新建立出貨單。`);
+      const remaining = Number(stock[0].quantity) - Number(allocation.quantity);
+      if (remaining <= 0.000001)
+        await connection.execute("DELETE FROM batch_locations WHERE location_id = ?", [allocation.location_id]);
+      else
+        await connection.execute("UPDATE batch_locations SET quantity = ? WHERE location_id = ?", [remaining, allocation.location_id]);
+      await connection.execute(
+        `INSERT INTO location_transactions (batch_id, from_location_id, quantity, transaction_type, remark)
+         VALUES (?, ?, ?, 'PICK', ?)`,
+        [order.batch_id, allocation.location_id, allocation.quantity, `出貨單 ${order.outbound_no}`],
+      );
+    }
+    const newQuantity = Number(batches[0].quantity) - Number(order.quantity);
+    await connection.execute(
+      "UPDATE inventory_batches SET quantity = ?, status = ? WHERE batch_id = ?",
+      [Math.max(0, newQuantity), newQuantity <= 0.000001 ? "DEPLETED" : "AVAILABLE", order.batch_id],
+    );
+    await connection.execute(
+      `INSERT INTO inventory_transactions
+       (product_id, batch_id, transaction_type, quantity, reference_id, remark)
+       VALUES (?, ?, 'SALE', ?, ?, ?)`,
+      [order.product_id, order.batch_id, order.quantity, orderId, `出貨單 ${order.outbound_no}`],
+    );
+    await connection.execute(
+      "UPDATE outbound_orders SET status = 'COMPLETED', completed_at = CURRENT_TIMESTAMP WHERE outbound_order_id = ?",
+      [orderId],
+    );
+    await connection.commit();
+    res.json({ ok: true, outboundNo: order.outbound_no });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    next(error);
+  } finally {
+    connection?.release();
+  }
+});
+
+app.post("/api/outbound-orders/:id/cancel", async (req, res, next) => {
+  const orderId = Number(req.params.id);
+  if (!Number.isInteger(orderId) || orderId < 1) return next(badRequest("出貨單編號不正確。"));
+  try {
+    const [result] = await pool.execute(
+      `UPDATE outbound_orders SET status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP
+       WHERE outbound_order_id = ? AND status = 'WAITING_PICK'`,
+      [orderId],
+    );
+    if (!result.affectedRows) return next(conflict("找不到待揀貨的出貨單，或此單已完成／取消。"));
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }
@@ -276,6 +501,8 @@ app.post("/api/batches/:id/issues", async (req, res, next) => {
   ) {
     return next(badRequest("出庫資料不正確，請確認數量與操作類型。"));
   }
+  if (type === "deduct")
+    return next(badRequest("一般出貨請建立出貨單，完成揀貨後再確認出貨。"));
   let connection;
   try {
     connection = await pool.getConnection();
@@ -285,27 +512,34 @@ app.post("/api/batches/:id/issues", async (req, res, next) => {
       [batchId],
     );
     if (!rows.length) throw badRequest("找不到可用的庫存批次。");
+    const [reservedBatch] = await connection.execute(
+      `SELECT COALESCE(SUM(quantity), 0) AS reserved_quantity
+       FROM outbound_orders WHERE batch_id = ? AND status = 'WAITING_PICK'`,
+      [batchId],
+    );
+    if (quantity > Number(rows[0].quantity) - Number(reservedBatch[0].reserved_quantity) + 0.000001)
+      throw conflict("此批次有待揀貨出貨單保留庫存，請先完成或取消出貨單。");
     const remaining = Number(rows[0].quantity) - quantity;
     if (remaining < -0.000001) throw badRequest("扣減數量不能大於現有庫存。");
     const [placements] = await connection.execute(
-      `SELECT bl.location_id, bl.quantity, l.warehouse_id, l.zone_code
+      `SELECT bl.location_id, bl.quantity, l.warehouse_id, l.zone_code,
+              COALESCE((SELECT SUM(a.quantity) FROM outbound_order_allocations a
+                        JOIN outbound_orders o ON o.outbound_order_id = a.outbound_order_id
+                        WHERE a.location_id = bl.location_id AND o.status = 'WAITING_PICK'), 0) AS reserved_quantity
        FROM batch_locations bl JOIN warehouse_locations l ON l.location_id = bl.location_id
        WHERE bl.batch_id = ? ORDER BY bl.location_id FOR UPDATE`,
       [batchId],
     );
     const placedTotal = placements.reduce(
-      (sum, placement) => sum + Number(placement.quantity),
+      (sum, placement) => sum + Math.max(0, Number(placement.quantity) - Number(placement.reserved_quantity)),
       0,
     );
-    let pickFromLocations = Math.max(
-      0,
-      quantity - Math.max(0, Number(rows[0].quantity) - placedTotal),
-    );
+    let pickFromLocations = Math.max(0, quantity - Math.max(0, Number(rows[0].quantity) - Number(reservedBatch[0].reserved_quantity) - placedTotal));
     if (pickFromLocations > placedTotal + 0.000001)
       throw new Error("批次庫存與格位配置數量不一致，請先核對庫存。");
     for (const placement of placements) {
       if (pickFromLocations <= 0.000001) break;
-      const picked = Math.min(Number(placement.quantity), pickFromLocations);
+      const picked = Math.min(Math.max(0, Number(placement.quantity) - Number(placement.reserved_quantity)), pickFromLocations);
       await assertZoneNotCountLocked(
         connection,
         placement.warehouse_id,
@@ -661,14 +895,18 @@ app.post("/api/locations/:id/move", async (req, res, next) => {
       );
     }
     const [sourceRows] = await connection.execute(
-      "SELECT batch_id, quantity FROM batch_locations WHERE location_id = ? FOR UPDATE",
+      `SELECT bl.batch_id, bl.quantity,
+              COALESCE((SELECT SUM(a.quantity) FROM outbound_order_allocations a
+                        JOIN outbound_orders o ON o.outbound_order_id = a.outbound_order_id
+                        WHERE a.location_id = bl.location_id AND o.status = 'WAITING_PICK'), 0) AS reserved_quantity
+       FROM batch_locations bl WHERE bl.location_id = ? FOR UPDATE`,
       [sourceId],
     );
     if (
       !sourceRows.length ||
-      quantity > Number(sourceRows[0].quantity) + 0.000001
+      quantity > Number(sourceRows[0].quantity) - Number(sourceRows[0].reserved_quantity) + 0.000001
     )
-      throw badRequest("移庫數量超過來源格位庫存。");
+      throw conflict("移庫數量超過來源格位可移動庫存；待揀貨出貨單保留的數量不能移動。");
     const batchId = sourceRows[0].batch_id;
     const [destinationRows] = await connection.execute(
       "SELECT batch_id, quantity FROM batch_locations WHERE location_id = ? FOR UPDATE",
@@ -758,6 +996,7 @@ app.get("/api/records", async (req, res, next) => {
                 t.transaction_date AS occurred_at, t.transaction_type AS event_type,
                 p.product_name, b.batch_no, t.quantity, p.unit,
                 CASE WHEN t.transaction_type = 'PURCHASE' THEN po.purchase_no
+                     WHEN t.transaction_type = 'SALE' THEN COALESCE(oo.outbound_no, CONCAT('異動 #', t.transaction_id))
                      WHEN t.transaction_type = 'ADJUSTMENT' THEN CONCAT('盤點單 #', t.reference_id)
                      ELSE CONCAT('異動 #', t.transaction_id) END AS reference_no,
                 NULL AS from_location, NULL AS to_location,
@@ -766,6 +1005,7 @@ app.get("/api/records", async (req, res, next) => {
          JOIN products p ON p.product_id = t.product_id
          JOIN inventory_batches b ON b.batch_id = t.batch_id
          LEFT JOIN purchase_orders po ON t.transaction_type = 'PURCHASE' AND po.purchase_id = t.reference_id
+         LEFT JOIN outbound_orders oo ON t.transaction_type = 'SALE' AND oo.outbound_order_id = t.reference_id
          LEFT JOIN inventory_count_sessions cs ON t.transaction_type = 'ADJUSTMENT' AND cs.count_session_id = t.reference_id
          LEFT JOIN warehouses w ON w.warehouse_id = cs.warehouse_id
 
@@ -862,6 +1102,16 @@ app.post("/api/count/sessions", async (req, res, next) => {
       [warehouseId, zoneCode],
     );
     if (!locations.length) throw badRequest("這個區域沒有可盤點的格位。");
+    const [pendingPick] = await connection.execute(
+      `SELECT o.outbound_no FROM outbound_orders o
+       JOIN outbound_order_allocations a ON a.outbound_order_id = o.outbound_order_id
+       JOIN warehouse_locations l ON l.location_id = a.location_id
+       WHERE o.status = 'WAITING_PICK' AND l.warehouse_id = ? AND l.zone_code = ?
+       LIMIT 1`,
+      [warehouseId, zoneCode],
+    );
+    if (pendingPick.length)
+      throw conflict(`此區域仍有待揀貨出貨單 ${pendingPick[0].outbound_no}，請先完成或取消後再盤點。`);
     const [active] = await connection.execute(
       `SELECT count_session_id FROM inventory_count_sessions
        WHERE warehouse_id = ? AND zone_code = ? AND status IN ('COUNTING', 'REVIEW')

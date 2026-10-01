@@ -176,6 +176,39 @@ CREATE TABLE `location_transactions` (
         FOREIGN KEY (`to_location_id`) REFERENCES `warehouse_locations` (`location_id`)
 ) ENGINE=InnoDB;
 
+/* 出貨單：待揀貨時先保留批次與格位數量，完成後才正式扣帳；取消可釋放保留量。 */
+CREATE TABLE `outbound_orders` (
+    `outbound_order_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `outbound_no` VARCHAR(30) NOT NULL UNIQUE,
+    `product_id` INT NOT NULL,
+    `batch_id` INT NOT NULL,
+    `quantity` DECIMAL(10,2) NOT NULL,
+    `status` ENUM('WAITING_PICK', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'WAITING_PICK',
+    `remark` VARCHAR(255),
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `completed_at` DATETIME,
+    `cancelled_at` DATETIME,
+    INDEX `idx_outbound_orders_batch_status` (`batch_id`, `status`),
+    INDEX `idx_outbound_orders_status_created` (`status`, `created_at`),
+    CONSTRAINT `fk_outbound_orders_product`
+        FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
+    CONSTRAINT `fk_outbound_orders_batch`
+        FOREIGN KEY (`batch_id`) REFERENCES `inventory_batches` (`batch_id`)
+) ENGINE=InnoDB;
+
+/* 出貨單預留的實際格位數量；完成時依這份分配更新倉儲地圖。 */
+CREATE TABLE `outbound_order_allocations` (
+    `allocation_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `outbound_order_id` INT NOT NULL,
+    `location_id` INT NOT NULL,
+    `quantity` DECIMAL(10,2) NOT NULL,
+    INDEX `idx_outbound_allocations_location` (`location_id`),
+    CONSTRAINT `fk_outbound_allocations_order`
+        FOREIGN KEY (`outbound_order_id`) REFERENCES `outbound_orders` (`outbound_order_id`),
+    CONSTRAINT `fk_outbound_allocations_location`
+        FOREIGN KEY (`location_id`) REFERENCES `warehouse_locations` (`location_id`)
+) ENGINE=InnoDB;
+
 /* 盤點單與逐格盤點結果 */
 CREATE TABLE `inventory_count_sessions` (
     `count_session_id` INT AUTO_INCREMENT PRIMARY KEY,

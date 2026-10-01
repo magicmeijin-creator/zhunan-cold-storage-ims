@@ -452,6 +452,12 @@ function renderInventory() {
       `${Number(item.qty).toLocaleString()} ${item.unit}`,
       "text-right font-bold text-slate-900",
     );
+    if (Number(item.reservedQty) > 0) {
+      const reserved = document.createElement("div");
+      reserved.className = "mt-0.5 text-xs font-normal text-amber-700";
+      reserved.textContent = `待揀貨預留 ${Number(item.reservedQty).toLocaleString()} ${item.unit}`;
+      quantityCell.appendChild(reserved);
+    }
     if (item.input_quantity != null && item.input_unit && item.input_unit !== item.unit) {
       const inputDetail = document.createElement("div");
       inputDetail.className = "mt-0.5 text-xs font-normal text-slate-500";
@@ -744,11 +750,12 @@ function openActionModal(id, type) {
     : inventoryItems.find((entry) => String(entry.id) === String(id));
   if (id != null && !item) return;
   if (type === "deduct" && id == null) {
-    if (!inventoryItems.length) {
+    const availableItems = inventoryItems.filter((entry) => Number(entry.qty) > 0);
+    if (!availableItems.length) {
       showToast("目前沒有可出貨的庫存批次。", "error");
       return;
     }
-    const products = [...new Map(inventoryItems.map((entry) => [Number(entry.product_id), entry])).values()]
+    const products = [...new Map(availableItems.map((entry) => [Number(entry.product_id), entry])).values()]
       .sort((a, b) => chineseStrokeCollator.compare(a.name || "", b.name || ""));
     productSelect.replaceChildren();
     products.forEach((product) => productSelect.add(new Option(product.name, product.product_id)));
@@ -764,14 +771,20 @@ function openActionModal(id, type) {
     document.getElementById("actionQtyInput").value = "";
     document.getElementById("actionNoteInput").value = "";
     document.getElementById("actionType").value = type;
+    document.getElementById("outboundConfirmWrap").classList.remove("hidden");
+    document.getElementById("outboundConfirmCheck").checked = false;
+    document.getElementById("outboundConfirmCheck").disabled = true;
     document.getElementById("actionModalTitle").textContent = "蔬果銷售 / 出庫登記";
-    document.getElementById("actionSubmitBtn").textContent = "確認出貨";
+    document.getElementById("actionSubmitBtn").textContent = "建立出貨單並預留庫存";
     document.getElementById("actionQtyLabel").textContent = "出貨數量";
     openModal("actionModal");
     renderOutboundBatches(productSelect.value).catch((error) => showToast(error.message, "error"));
     return;
   } else {
     picker.classList.add("hidden");
+    document.getElementById("outboundConfirmWrap").classList.add("hidden");
+    document.getElementById("outboundConfirmCheck").checked = false;
+    document.getElementById("outboundConfirmCheck").disabled = true;
   }
   document.getElementById("actionQtyInput").disabled = false;
   document.getElementById("actionNoteInput").disabled = false;
@@ -787,7 +800,7 @@ function openActionModal(id, type) {
   document.getElementById("actionModalTitle").textContent =
     type === "deduct" ? "蔬果銷售 / 出庫登記" : "蔬果損耗 / 報廢登記";
   document.getElementById("actionSubmitBtn").textContent =
-    type === "deduct" ? "確認出庫" : "確認報廢";
+    type === "deduct" ? "建立出貨單並預留庫存" : "確認報廢";
   document.getElementById("actionQtyLabel").textContent = `${type === "deduct" ? "出貨" : "報廢"}數量 (${selectedItem.unit})`;
   openModal("actionModal");
 }
@@ -795,7 +808,7 @@ function openActionModal(id, type) {
 async function renderOutboundBatches(productId) {
   const list = document.getElementById("outboundBatchList");
   const batches = inventoryItems
-    .filter((entry) => Number(entry.product_id) === Number(productId))
+    .filter((entry) => Number(entry.product_id) === Number(productId) && Number(entry.qty) > 0)
     .sort((a, b) =>
       String(a.inboundDate || "9999-12-31").localeCompare(String(b.inboundDate || "9999-12-31")) ||
       String(a.receivedAt || "9999-12-31 23:59:59").localeCompare(String(b.receivedAt || "9999-12-31 23:59:59")) ||
@@ -829,7 +842,7 @@ async function renderOutboundBatches(productId) {
     button.className = "w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-emerald-400 hover:bg-emerald-50";
     const title = document.createElement("span");
     title.className = "block text-sm font-bold text-slate-800";
-    title.textContent = `${index === 0 ? "FIFO 優先 · " : ""}批次 ${batch.batch_no} · ${Number(batch.qty).toLocaleString()} ${batch.unit}`;
+    title.textContent = `${index === 0 ? "FIFO 優先 · " : ""}批次 ${batch.batch_no} · 可用 ${Number(batch.qty).toLocaleString()} ${batch.unit}`;
     const detail = document.createElement("span");
     detail.className = "mt-1 block text-xs text-slate-600";
     detail.textContent = `進貨 ${batch.inboundDate || "未記錄"} · 效期 ${batch.expiryDate || "未設定"}`;
@@ -867,7 +880,9 @@ function selectOutboundBatch(selectedItem) {
   document.getElementById("actionItemId").value = selectedItem.id;
   document.getElementById("actionQtyInput").disabled = false;
   document.getElementById("actionNoteInput").disabled = false;
-  document.getElementById("actionSubmitBtn").disabled = false;
+  document.getElementById("actionSubmitBtn").disabled = true;
+  document.getElementById("outboundConfirmCheck").checked = false;
+  document.getElementById("outboundConfirmCheck").disabled = false;
   document.getElementById("actionQtyInput").value = "";
   document.getElementById("actionQtyInput").max = selectedItem.qty;
   document.getElementById("actionQtyLabel").textContent = `出貨數量 (${selectedItem.unit})`;
@@ -897,9 +912,21 @@ document.getElementById("outboundProductSelect").addEventListener("change", (eve
   document.getElementById("actionSubmitBtn").disabled = true;
   document.getElementById("actionQtyInput").value = "";
   document.getElementById("actionNoteInput").value = "";
+  document.getElementById("outboundConfirmCheck").checked = false;
+  document.getElementById("outboundConfirmCheck").disabled = true;
   document.getElementById("actionItemName").textContent = "請選擇下方的庫存批次";
   document.getElementById("actionCurrentQty").textContent = "點選批次可查看該批存放的倉庫與格位。";
   renderOutboundBatches(event.target.value).catch((error) => showToast(error.message, "error"));
+});
+
+document.getElementById("outboundConfirmCheck").addEventListener("change", (event) => {
+  document.getElementById("actionSubmitBtn").disabled = !event.target.checked;
+});
+
+document.getElementById("actionQtyInput").addEventListener("input", () => {
+  if (document.getElementById("actionType").value !== "deduct") return;
+  document.getElementById("outboundConfirmCheck").checked = false;
+  document.getElementById("actionSubmitBtn").disabled = true;
 });
 
 async function handleActionSubmit(event) {
@@ -907,24 +934,49 @@ async function handleActionSubmit(event) {
   const button = document.getElementById("actionSubmitBtn");
   button.disabled = true;
   try {
-    await api(
-      `/api/batches/${encodeURIComponent(document.getElementById("actionItemId").value)}/issues`,
-      {
+    const isOutbound = document.getElementById("actionType").value === "deduct";
+    if (isOutbound && !document.getElementById("outboundConfirmCheck").checked) {
+      showToast("請先核對產品、批次、儲位和出貨數量。", "error");
+      return;
+    }
+    if (isOutbound) {
+      const item = inventoryItems.find(
+        (entry) => String(entry.id) === document.getElementById("actionItemId").value,
+      );
+      const quantity = document.getElementById("actionQtyInput").value;
+      const locationSummary = document.getElementById("actionCurrentQty").textContent;
+      const confirmed = window.confirm(
+        `即將建立 ${item?.name || "所選商品"}（批次 ${item?.batch_no || ""}）出貨單，數量 ${quantity} ${item?.unit || ""}。\n${locationSummary}\n\n建立後請依單據到倉位取貨，再到「出貨單」確認揀貨完成；確認前不會扣減庫存。`,
+      );
+      if (!confirmed) return;
+    }
+    const payload = {
+      quantity: document.getElementById("actionQtyInput").value,
+      remark: document.getElementById("actionNoteInput").value.trim(),
+    };
+    if (isOutbound) {
+      const result = await api("/api/outbound-orders", {
         method: "POST",
-        body: JSON.stringify({
-          type: document.getElementById("actionType").value,
-          quantity: document.getElementById("actionQtyInput").value,
-          remark: document.getElementById("actionNoteInput").value.trim(),
-        }),
-      },
-    );
+        body: JSON.stringify({ ...payload, batchId: document.getElementById("actionItemId").value }),
+      });
+      closeModal("actionModal");
+      window.location.href = `/shipments.html?created=${encodeURIComponent(result.outboundNo)}`;
+      return;
+    }
+    await api(`/api/batches/${encodeURIComponent(document.getElementById("actionItemId").value)}/issues`, {
+      method: "POST",
+      body: JSON.stringify({ ...payload, type: document.getElementById("actionType").value }),
+    });
     closeModal("actionModal");
     await refreshInventory();
     showToast("庫存異動已儲存");
   } catch (error) {
     showToast(error.message, "error");
   } finally {
-    button.disabled = false;
+    button.disabled =
+      document.getElementById("actionType").value === "deduct"
+        ? !document.getElementById("outboundConfirmCheck").checked
+        : false;
   }
 }
 
