@@ -796,7 +796,11 @@ async function renderOutboundBatches(productId) {
   const list = document.getElementById("outboundBatchList");
   const batches = inventoryItems
     .filter((entry) => Number(entry.product_id) === Number(productId))
-    .sort((a, b) => String(a.expiryDate || "9999-12-31").localeCompare(String(b.expiryDate || "9999-12-31")) || String(a.inboundDate || "").localeCompare(String(b.inboundDate || "")) || Number(a.id) - Number(b.id));
+    .sort((a, b) =>
+      String(a.inboundDate || "9999-12-31").localeCompare(String(b.inboundDate || "9999-12-31")) ||
+      String(a.receivedAt || "9999-12-31 23:59:59").localeCompare(String(b.receivedAt || "9999-12-31 23:59:59")) ||
+      Number(a.id) - Number(b.id),
+    );
   list.replaceChildren();
   if (!batches.length) {
     list.textContent = "此產品目前沒有可出貨庫存。";
@@ -825,7 +829,7 @@ async function renderOutboundBatches(productId) {
     button.className = "w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-emerald-400 hover:bg-emerald-50";
     const title = document.createElement("span");
     title.className = "block text-sm font-bold text-slate-800";
-    title.textContent = `批次 ${batch.batch_no} · ${Number(batch.qty).toLocaleString()} ${batch.unit}`;
+    title.textContent = `${index === 0 ? "FIFO 優先 · " : ""}批次 ${batch.batch_no} · ${Number(batch.qty).toLocaleString()} ${batch.unit}`;
     const detail = document.createElement("span");
     detail.className = "mt-1 block text-xs text-slate-600";
     detail.textContent = `進貨 ${batch.inboundDate || "未記錄"} · 效期 ${batch.expiryDate || "未設定"}`;
@@ -834,6 +838,13 @@ async function renderOutboundBatches(productId) {
     location.textContent = locationText.length ? locationText.join("；") : "尚無倉儲格位資訊";
     button.append(title, detail, location);
     button.addEventListener("click", () => {
+      if (index > 0 && document.getElementById("actionItemId").value !== String(batch.id)) {
+        const earliestBatch = batches[0];
+        const confirmed = window.confirm(
+          `仍有較早進貨的批次 ${earliestBatch.batch_no}（${Number(earliestBatch.qty).toLocaleString()} ${earliestBatch.unit}）尚未出完。\n\n要確認跳過較早批次，改選批次 ${batch.batch_no} 嗎？`,
+        );
+        if (!confirmed) return;
+      }
       list.querySelectorAll("[data-outbound-batch-id]").forEach((option) => {
         option.classList.remove("border-emerald-500", "bg-emerald-50", "ring-1", "ring-emerald-400");
         option.setAttribute("aria-selected", "false");
@@ -844,6 +855,12 @@ async function renderOutboundBatches(productId) {
     });
     list.appendChild(button);
   });
+  const fifoButton = list.querySelector("[data-outbound-batch-id]");
+  if (fifoButton) {
+    fifoButton.classList.add("border-emerald-500", "bg-emerald-50", "ring-1", "ring-emerald-400");
+    fifoButton.setAttribute("aria-selected", "true");
+    selectOutboundBatch(batches[0]);
+  }
 }
 
 function selectOutboundBatch(selectedItem) {
