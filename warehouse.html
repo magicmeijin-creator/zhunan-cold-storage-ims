@@ -123,7 +123,7 @@
             </div>
           </form>
           <div class="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-            每個格位最多存放 5 公斤；較大的批次可拆分到多個格位。點選空格可上架尚未定位的批次；先點有貨格位、再點空格可移庫。
+            每個格位最多存放 5 公斤。使用「快速上架」輸入商品與數量，系統會優先使用目前區域的空格並自動拆分；先點有貨格位、再點空格仍可手動移庫。
           </div>
         </div>
         <form
@@ -226,13 +226,18 @@
             <h2 id="mapTitle" class="font-bold">請先建立倉庫格位</h2>
             <p id="mapSummary" class="text-sm text-slate-500"></p>
           </div>
-          <div class="flex gap-3 text-xs">
-            <span><i class="fa-solid fa-square text-white"></i> 空格</span
-            ><span
-              ><i class="fa-solid fa-square text-emerald-600"></i> 有庫存</span
-            ><span
-              ><i class="fa-solid fa-square text-amber-400"></i> 即將到期</span
-            >
+          <div class="flex flex-wrap items-center gap-3">
+            <button id="openAutoPutaway" type="button" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50" disabled>
+              <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>快速上架
+            </button>
+            <div class="flex gap-3 text-xs">
+              <span><i class="fa-solid fa-square text-white"></i> 空格</span
+              ><span
+                ><i class="fa-solid fa-square text-emerald-600"></i> 有庫存</span
+              ><span
+                ><i class="fa-solid fa-square text-amber-400"></i> 即將到期</span
+              >
+            </div>
           </div>
         </div>
         <div id="mapGrid" class="overflow-x-auto"></div>
@@ -256,49 +261,52 @@
     </main>
 
     <dialog
-      id="putawayDialog"
-      class="w-[min(92vw,440px)] rounded-2xl p-0 shadow-xl backdrop:bg-slate-900/50"
+      id="autoPutawayDialog"
+      class="w-[min(92vw,480px)] rounded-2xl p-0 shadow-xl backdrop:bg-slate-900/50"
     >
-      <form id="putawayForm" class="space-y-4 p-5">
+      <form id="autoPutawayForm" class="space-y-4 p-5">
         <div class="flex items-center justify-between">
-          <h2 class="font-bold">上架批次</h2>
+          <h2 class="font-bold">快速上架</h2>
           <button
             type="button"
             class="text-xl text-slate-500"
-            onclick="closeDialog('putawayDialog')"
+            onclick="closeDialog('autoPutawayDialog')"
             aria-label="關閉"
           >
             ×
           </button>
         </div>
-        <p id="putawayLocation" class="text-sm text-slate-500"></p>
+        <p id="autoPutawayContext" class="text-sm text-slate-500"></p>
         <label class="block text-sm"
-          >未上架批次<select
-            id="batchSelect"
+          >商品<select
+            id="autoPutawayProduct"
             class="mt-1 w-full rounded-lg border border-slate-300 p-2"
             required
           ></select
         ></label>
+        <p id="autoPutawayAvailable" class="-mt-3 text-xs text-slate-500"></p>
         <label class="block text-sm"
           >上架數量<input
-            id="putawayQuantity"
+            id="autoPutawayQuantity"
             type="number"
             min="0.01"
             step="0.01"
             class="mt-1 w-full rounded-lg border border-slate-300 p-2"
             required
         /></label>
+        <p class="-mt-3 text-xs text-slate-500">每格最多 5 公斤；系統會依效期與進貨先後使用未上架批次，並優先安排在目前區域的空格。</p>
         <div class="flex justify-end gap-2">
           <button
             type="button"
             class="rounded-lg px-4 py-2 text-sm"
-            onclick="closeDialog('putawayDialog')"
+            onclick="closeDialog('autoPutawayDialog')"
           >
             取消</button
           ><button
-            class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
+            id="autoPutawaySubmit"
+            class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            確認上架
+            自動分配並上架
           </button>
         </div>
       </form>

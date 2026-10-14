@@ -2,6 +2,7 @@ let locations = [];
 let activeWarehouseId = "";
 let activeZoneCode = "";
 let sourceLocation = null;
+let autoPutawayProducts = [];
 
 async function warehouseApi(url, options = {}) {
   const response = await fetch(url, {
@@ -34,6 +35,7 @@ async function loadWarehouses(preferredId) {
     select.add(option);
     activeWarehouseId = "";
     locations = [];
+    document.getElementById("openAutoPutaway").disabled = true;
     document.getElementById("renameWarehouseName").value = "";
     document.getElementById("renameWarehouseButton").disabled = true;
     renderMap();
@@ -46,6 +48,7 @@ async function loadWarehouses(preferredId) {
     preferredId || select.value || warehouses[0].warehouse_id,
   );
   select.value = activeWarehouseId;
+  document.getElementById("openAutoPutaway").disabled = !activeWarehouseId;
   const selectedWarehouse = warehouses.find(
     (warehouse) => String(warehouse.warehouse_id) === activeWarehouseId,
   );
@@ -140,7 +143,7 @@ function renderMap() {
     } else {
       const hint = document.createElement("span");
       hint.className = "mt-1 block text-xs text-emerald-700";
-      hint.textContent = sourceLocation ? "點此移庫到這格" : "點此上架";
+      hint.textContent = sourceLocation ? "點此移庫到這格" : "使用快速上架自動分配";
       button.appendChild(hint);
     }
     button.addEventListener("click", () => handleSlotClick(location));
@@ -208,41 +211,103 @@ async function handleSlotClick(location) {
     return;
   }
   if (sourceLocation) return moveStock(location);
-  return openPutaway(location);
+  notify("請按上方「快速上架」，輸入商品與數量，系統會自動安排空格位。");
 }
 
-async function openPutaway(location) {
+function updateAutoPutawaySelection() {
+  const select = document.getElementById("autoPutawayProduct");
+  const product = autoPutawayProducts.find(
+    (item) => String(item.productId) === select.value,
+  );
+  const quantity = document.getElementById("autoPutawayQuantity");
+  const submit = document.getElementById("autoPutawaySubmit");
+  if (!product) {
+    document.getElementById("autoPutawayAvailable").textContent = "沒有尚未上架的庫存商品。";
+    quantity.value = "";
+    quantity.max = "";
+    submit.disabled = true;
+    return;
+  }
+  document.getElementById("autoPutawayAvailable").textContent =
+    `尚未上架 ${product.available.toLocaleString()} ${product.unit}`;
+  quantity.max = String(product.available);
+  quantity.value = "";
+  quantity.placeholder = `最多 ${product.available.toLocaleString()} ${product.unit}`;
+  submit.disabled = false;
+}
+
+async function explainNoUnlocatedStock() {
+  try {
+    const [inventory, warehouses] = await Promise.all([
+      warehouseApi("/api/inventory"),
+      warehouseApi("/api/warehouses"),
+    ]);
+    const stockTotal = inventory.reduce(
+      (sum, batch) => sum + Number(batch.onHandQty ?? batch.qty ?? 0),
+      0,
+    );
+    const maps = await Promise.all(
+      warehouses.map((warehouse) =>
+        warehouseApi(`/api/warehouses/${warehouse.warehouse_id}/map`),
+      ),
+    );
+    const locatedTotal = maps.flat().reduce(
+      (sum, location) => sum + Number(location.stored_quantity || 0),
+      0,
+    );
+    const unlocatedEstimate = Math.max(0, stockTotal - locatedTotal);
+    if (stockTotal <= 0.000001) {
+      notify("目前沒有可上架的有效批次；請確認進貨已完成，且批次狀態為可用。");
+    } else if (unlocatedEstimate <= 0.000001) {
+      notify(`目前有 ${stockTotal.toLocaleString()} kg 庫存，但都已經放在倉位中。快速上架只處理尚未定位的貨物；要改位置請用移庫。`);
+    } else {
+      notify(`庫存約有 ${unlocatedEstimate.toLocaleString()} kg 尚未定位，但批次清單沒有回傳。請重新啟動 WMS 伺服器，讓新版上架 API 載入；若仍出現，表示庫存與儲位記錄需要核對。`);
+    }
+  } catch (error) {
+    notify(`無未上架清單，且無法取得庫存診斷：${error.message}`);
+  }
+}
+
+async function openAutoPutaway() {
+  if (!activeWarehouseId) return notify("請先建立或選擇倉庫。");
   try {
     const batches = await warehouseApi(
       `/api/warehouses/${activeWarehouseId}/unlocated-batches`,
     );
-    const select = document.getElementById("batchSelect");
-    select.replaceChildren();
-    if (!batches.length) {
-      notify("目前沒有尚未上架的庫存批次。請先在進銷存總覽登記進貨。");
+    if (batches.length && batches.some((batch) => batch.product_id == null)) {
+      notify("目前執行中的 WMS API 是舊版，無法辨識商品。請停止舊伺服器並重新啟動 WMS，再重新整理頁面。");
       return;
     }
+    const productsById = new Map();
     batches.forEach((batch) => {
-      const label = `${batch.product_name} · ${batch.batch_no} · 可上架 ${Number(batch.unlocated_quantity)} ${batch.unit}`;
-      select.add(new Option(label, batch.batch_id));
+      const productId = Number(batch.product_id);
+      const available = Number(batch.unlocated_quantity || 0);
+      if (!productId || available <= 0) return;
+      const product = productsById.get(productId) || {
+        productId,
+        name: batch.product_name,
+        unit: batch.unit,
+        available: 0,
+      };
+      product.available += available;
+      productsById.set(productId, product);
     });
-    const selected = batches[0];
-    const quantityInput = document.getElementById("putawayQuantity");
-    const availableCapacity = Math.max(0, 5 - Number(location.stored_quantity || 0));
-    document.getElementById("putawayLocation").textContent =
-      `目的格位：${location.location_code} · 每格上限 5 公斤，尚可放 ${availableCapacity} 公斤`;
-    quantityInput.max = Math.min(Number(selected.unlocated_quantity), availableCapacity);
-    quantityInput.value = quantityInput.max;
-    select.onchange = () => {
-      const batch = batches.find(
-        (item) => String(item.batch_id) === select.value,
-      );
-      quantityInput.max = Math.min(Number(batch.unlocated_quantity), availableCapacity);
-      quantityInput.value = quantityInput.max;
-    };
-    document.getElementById("putawayForm").dataset.locationId =
-      location.location_id;
-    document.getElementById("putawayDialog").showModal();
+    autoPutawayProducts = [...productsById.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, "zh-TW"),
+    );
+    const select = document.getElementById("autoPutawayProduct");
+    select.replaceChildren();
+    if (!autoPutawayProducts.length) {
+      await explainNoUnlocatedStock();
+      return;
+    }
+    autoPutawayProducts.forEach((product) => {
+      select.add(new Option(product.name, product.productId));
+    });
+    document.getElementById("autoPutawayContext").textContent =
+      `倉庫：${document.getElementById("warehouseSelect").selectedOptions[0]?.textContent || "—"}；優先使用區域 ${activeZoneCode || "—"} 的空格，必要時會延伸到其他區域。`;
+    updateAutoPutawaySelection();
+    document.getElementById("autoPutawayDialog").showModal();
   } catch (error) {
     notify(error.message);
   }
@@ -379,23 +444,40 @@ document
   });
 
 document
-  .getElementById("putawayForm")
+  .getElementById("openAutoPutaway")
+  .addEventListener("click", openAutoPutaway);
+
+document
+  .getElementById("autoPutawayProduct")
+  .addEventListener("change", updateAutoPutawaySelection);
+
+document
+  .getElementById("autoPutawayForm")
   .addEventListener("submit", async (event) => {
     event.preventDefault();
-    const form = event.currentTarget;
+    const submit = document.getElementById("autoPutawaySubmit");
+    submit.disabled = true;
+    submit.textContent = "分配上架中…";
     try {
-      await warehouseApi(`/api/locations/${form.dataset.locationId}/putaway`, {
+      const result = await warehouseApi(`/api/warehouses/${activeWarehouseId}/auto-putaway`, {
         method: "POST",
         body: JSON.stringify({
-          batchId: document.getElementById("batchSelect").value,
-          quantity: document.getElementById("putawayQuantity").value,
+          productId: document.getElementById("autoPutawayProduct").value,
+          quantity: document.getElementById("autoPutawayQuantity").value,
+          preferredZoneCode: activeZoneCode,
         }),
       });
-      closeDialog("putawayDialog");
+      closeDialog("autoPutawayDialog");
       await loadMap();
-      notify("上架完成，異動紀錄已儲存。");
+      const placementSummary = result.allocations
+        .map((item) => `${item.locationCode} ${Number(item.quantity).toLocaleString()} kg`)
+        .join("、");
+      notify(`快速上架完成：${placementSummary}`);
     } catch (error) {
       notify(error.message);
+    } finally {
+      submit.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>自動分配並上架';
+      submit.disabled = false;
     }
   });
 

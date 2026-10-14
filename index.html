@@ -312,10 +312,10 @@
               onchange="applyFilters()"
               class="border border-slate-300 rounded-lg text-sm px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
             >
-              <option value="all">所有效期狀態</option>
-              <option value="fresh">🟢 新鮮正常 (>3天)</option>
-              <option value="expiring">🟡 即將到期 (≤3天)</option>
-              <option value="expired">🔴 已過期 (≤0天)</option>
+              <option value="all">所有商品</option>
+              <option value="fresh">🟢 生鮮食品：效期正常 (&gt;3天)</option>
+              <option value="expiring">🟡 生鮮食品：即將到期 (≤3天)</option>
+              <option value="expired">🔴 生鮮食品：已過期</option>
             </select>
 
           </div>
@@ -336,40 +336,67 @@
             全部
           </button>
           <button
-            onclick="selectCategory('葉菜類')"
+            onclick="selectCategory('飲料')"
             class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
-            data-cat="葉菜類"
+            data-cat="飲料"
           >
-            🥬 葉菜類
+            🥤 飲料
           </button>
           <button
-            onclick="selectCategory('根莖類')"
+            onclick="selectCategory('麵包與熟食')"
             class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
-            data-cat="根莖類"
+            data-cat="麵包與熟食"
           >
-            🥕 根莖類
+            🍞 麵包與熟食
           </button>
           <button
-            onclick="selectCategory('水果類')"
+            onclick="selectCategory('零食')"
             class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
-            data-cat="水果類"
+            data-cat="零食"
           >
-            🍅 水果類
+            🍪 零食
           </button>
           <button
-            onclick="selectCategory('菌菇類')"
+            onclick="selectCategory('冷藏乳品')"
             class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
-            data-cat="菌菇類"
+            data-cat="冷藏乳品"
           >
-            🍄 菌菇類
+            🥛 冷藏乳品
           </button>
-
           <button
-            onclick="selectCategory('香辛調味')"
+            onclick="selectCategory('冷凍食品')"
             class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
-            data-cat="香辛調味"
+            data-cat="冷凍食品"
           >
-            🧄 香辛調味
+            🧊 冷凍食品
+          </button>
+          <button
+            onclick="selectCategory('日用品')"
+            class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="日用品"
+          >
+            🧻 日用品
+          </button>
+          <button
+            onclick="selectCategory('季節用品')"
+            class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="季節用品"
+          >
+            ☔ 季節用品
+          </button>
+          <button
+            onclick="selectCategory('生鮮食品')"
+            class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="生鮮食品"
+          >
+            🥬 生鮮食品
+          </button>
+          <button
+            onclick="selectCategory('其他')"
+            class="category-btn bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-medium transition shrink-0"
+            data-cat="其他"
+          >
+            📦 其他
           </button>
         </div>
       </div>
@@ -384,7 +411,7 @@
           <div class="flex flex-wrap items-center gap-3">
             <h2 class="font-bold text-slate-800 text-base flex items-center gap-2">
               <i class="fa-solid fa-list-check text-emerald-600"></i>
-              生鮮庫存清單
+              商品庫存清單
             </h2>
             <button id="openWarehouseOverview" type="button" class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">
               <i class="fa-solid fa-map-location-dot mr-1"></i>查看倉儲位置
@@ -406,7 +433,7 @@
                 <th class="py-3 px-4" data-sort-header="expiry" aria-sort="ascending"><button type="button" data-sort-key="expiry" class="inline-flex items-center gap-1 hover:text-emerald-700">保存到期日 (剩餘天數)<i data-sort-icon="expiry" class="fa-solid fa-arrow-up text-emerald-700" aria-hidden="true"></i></button></th>
                 <th class="py-3 px-4 text-right" data-sort-header="qty" aria-sort="none"><button type="button" data-sort-key="qty" class="inline-flex items-center gap-1 hover:text-emerald-700">當前庫存<i data-sort-icon="qty" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
                 <th class="py-3 px-4 text-right" data-sort-header="unitCost" aria-sort="none"><button type="button" data-sort-key="unitCost" class="inline-flex items-center gap-1 hover:text-emerald-700">每公斤成本<i data-sort-icon="unitCost" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
-                <th class="py-3 px-4 text-center" data-sort-header="status" aria-sort="none"><button type="button" data-sort-key="status" class="inline-flex items-center gap-1 hover:text-emerald-700">狀態<i data-sort-icon="status" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4 text-center" data-sort-header="status" aria-sort="none"><button type="button" data-sort-key="status" class="inline-flex items-center gap-1 hover:text-emerald-700">狀態（僅生鮮食品）<i data-sort-icon="status" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
                 <th class="py-3 px-4 text-center">操作</th>
               </tr>
             </thead>
@@ -525,11 +552,15 @@
                 required
                 class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
               >
-                <option value="葉菜類">🥬 葉菜類</option>
-                <option value="根莖類">🥕 根莖類</option>
-                <option value="水果類">🍅 水果類</option>
-                <option value="菌菇類">🍄 菌菇類</option>
-                <option value="香辛調味">🧄 香辛調味</option>
+                <option value="飲料">🥤 飲料</option>
+                <option value="麵包與熟食">🍞 麵包與熟食</option>
+                <option value="零食">🍪 零食</option>
+                <option value="冷藏乳品">🥛 冷藏乳品</option>
+                <option value="冷凍食品">🧊 冷凍食品</option>
+                <option value="日用品">🧻 日用品</option>
+                <option value="季節用品">☔ 季節用品</option>
+                <option value="生鮮食品">🥬 生鮮食品</option>
+                <option value="其他">📦 其他</option>
               </select>
             </div>
 

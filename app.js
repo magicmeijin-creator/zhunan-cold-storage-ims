@@ -34,6 +34,23 @@ function daysRemaining(value) {
   return Math.round((expiryUtc - todayUtc) / 86400000);
 }
 
+function displayProductCategory(category) {
+  const legacyFreshCategories = new Set([
+    "葉菜類",
+    "根莖類",
+    "水果類",
+    "菌菇類",
+    "香辛調味",
+  ]);
+  const value = String(category || "").trim();
+  if (!value || legacyFreshCategories.has(value)) return value ? "生鮮食品" : "其他";
+  return value;
+}
+
+function hasFreshnessStatus(item) {
+  return displayProductCategory(item.category) === "生鮮食品";
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
@@ -60,7 +77,7 @@ function getVisibleItems() {
   const status = document.getElementById("statusSelect").value;
   return inventoryItems
     .filter((item) => {
-      if (selectedCategory !== "all" && item.category !== selectedCategory)
+      if (selectedCategory !== "all" && displayProductCategory(item.category) !== selectedCategory)
         return false;
       if (
         keyword &&
@@ -72,6 +89,7 @@ function getVisibleItems() {
         )
       )
         return false;
+      if (status !== "all" && !hasFreshnessStatus(item)) return false;
       const days = daysRemaining(item.expiryDate);
       if (status === "fresh" && (days === null || days <= 3)) return false;
       if (status === "expiring" && (days === null || days > 3)) return false;
@@ -105,6 +123,7 @@ function getVisibleItems() {
         result = Number(a.unitCostPerKg) - Number(b.unitCostPerKg);
       } else if (sortState.key === "status") {
         const statusRank = (item) => {
+          if (!hasFreshnessStatus(item)) return -1;
           const days = daysRemaining(item.expiryDate);
           return days === null ? 0 : days < 0 ? 3 : days <= 3 ? 2 : 1;
         };
@@ -428,7 +447,7 @@ function renderInventory() {
     nameCell.classList.add("font-bold", "text-slate-800");
     const category = document.createElement("div");
     category.className = "text-xs text-slate-400";
-    category.textContent = `${item.category || "未分類"} · ${item.batch_no || ""}`;
+    category.textContent = `${displayProductCategory(item.category)} · ${item.batch_no || ""}`;
     nameCell.appendChild(category);
     textCell(row, item.origin || "未指定供應商");
     textCell(row, item.inboundDate);
@@ -439,8 +458,9 @@ function renderInventory() {
     );
     receivedAt.title = "系統建立此進貨批次的時間";
     const expiry = textCell(row, item.expiryDate || "未設定");
-    const days = daysRemaining(item.expiryDate);
-    if (days !== null) {
+    const showFreshness = hasFreshnessStatus(item);
+    const days = showFreshness ? daysRemaining(item.expiryDate) : null;
+    if (showFreshness && days !== null) {
       const suffix =
         days < 0
           ? `已過期 ${Math.abs(days)} 天`
@@ -474,21 +494,23 @@ function renderInventory() {
       `${Number(item.unitCostPerKg || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元/kg`,
       "text-right tabular-nums",
     );
-    const statusCell = textCell(row, "");
+    const statusCell = textCell(row, showFreshness ? "" : "—");
     statusCell.classList.add("text-center");
-    const badge = document.createElement("span");
-    const isExpired = days !== null && days < 0;
-    const isExpiring = days !== null && days <= 3;
-    badge.className = `font-semibold px-2.5 py-1 rounded-full text-xs ${isExpired ? "bg-rose-100 text-rose-700" : isExpiring ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`;
-    badge.textContent =
-      days === null
-        ? "未設定效期"
-        : isExpired
-          ? "已過期"
-          : isExpiring
-            ? "即將到期"
-            : "新鮮";
-    statusCell.appendChild(badge);
+    if (showFreshness) {
+      const badge = document.createElement("span");
+      const isExpired = days !== null && days < 0;
+      const isExpiring = days !== null && days <= 3;
+      badge.className = `font-semibold px-2.5 py-1 rounded-full text-xs ${isExpired ? "bg-rose-100 text-rose-700" : isExpiring ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`;
+      badge.textContent =
+        days === null
+          ? "未設定效期"
+          : isExpired
+            ? "已過期"
+            : isExpiring
+              ? "即將到期"
+              : "新鮮";
+      statusCell.appendChild(badge);
+    }
     const actions = textCell(row, "");
     actions.classList.add("text-center");
     const group = document.createElement("div");
@@ -516,10 +538,12 @@ function renderInventory() {
 
 function updateMetrics() {
   const expiring = inventoryItems.filter((item) => {
+    if (!hasFreshnessStatus(item)) return false;
     const days = daysRemaining(item.expiryDate);
     return days !== null && days >= 0 && days <= 3;
   }).length;
   const expired = inventoryItems.filter((item) => {
+    if (!hasFreshnessStatus(item)) return false;
     const days = daysRemaining(item.expiryDate);
     return days !== null && days < 0;
   }).length;

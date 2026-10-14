@@ -840,7 +840,7 @@ app.get("/api/warehouses/:id/unlocated-batches", async (req, res, next) => {
     return next(badRequest("倉庫編號不正確。"));
   try {
     const [rows] = await pool.execute(`
-      SELECT b.batch_id, b.batch_no, b.quantity - COALESCE(SUM(bl.quantity), 0) AS unlocated_quantity,
+      SELECT b.batch_id, b.product_id, b.batch_no, b.quantity - COALESCE(SUM(bl.quantity), 0) AS unlocated_quantity,
              b.expiry_date, p.product_name, p.unit
       FROM inventory_batches b
       JOIN products p ON p.product_id = b.product_id
@@ -852,6 +852,120 @@ app.get("/api/warehouses/:id/unlocated-batches", async (req, res, next) => {
     res.json(rows);
   } catch (error) {
     next(error);
+  }
+});
+
+app.post("/api/warehouses/:id/auto-putaway", async (req, res, next) => {
+  const warehouseId = Number(req.params.id);
+  const productId = Number(req.body.productId);
+  const quantity = Number(req.body.quantity);
+  const preferredZoneCode = String(req.body.preferredZoneCode || "").trim();
+  if (
+    !Number.isInteger(warehouseId) || warehouseId < 1 ||
+    !Number.isInteger(productId) || productId < 1 ||
+    !Number.isFinite(quantity) || quantity <= 0 ||
+    Math.abs(quantity * 100 - Math.round(quantity * 100)) > 0.000001
+  ) {
+    return next(badRequest("請選擇商品並輸入大於 0、最多兩位小數的上架數量。"));
+  }
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [warehouses] = await connection.execute(
+      "SELECT warehouse_id FROM warehouses WHERE warehouse_id = ? FOR UPDATE",
+      [warehouseId],
+    );
+    if (!warehouses.length) throw badRequest("找不到這個倉庫。請重新選擇倉庫後再試。 ");
+
+    const [batchRows] = await connection.execute(
+      `SELECT b.batch_id, b.batch_no, b.quantity,
+              b.quantity - COALESCE((SELECT SUM(bl.quantity) FROM batch_locations bl WHERE bl.batch_id = b.batch_id), 0) AS unlocated_quantity,
+              b.expiry_date, b.received_date
+       FROM inventory_batches b
+       WHERE b.product_id = ? AND b.quantity > 0 AND b.status = 'AVAILABLE'
+       ORDER BY b.expiry_date IS NULL, b.expiry_date, b.received_date, b.batch_id
+       FOR UPDATE`,
+      [productId],
+    );
+    const lotPlan = [];
+    let remaining = quantity;
+    for (const batch of batchRows) {
+      const available = Math.max(0, Number(batch.unlocated_quantity));
+      if (available <= 0.000001) continue;
+      const assigned = Math.min(available, remaining);
+      lotPlan.push({ batch, quantity: assigned });
+      remaining = Math.round((remaining - assigned + Number.EPSILON) * 100) / 100;
+      if (remaining <= 0.000001) break;
+    }
+    if (remaining > 0.000001) {
+      const availableTotal = batchRows.reduce(
+        (sum, batch) => sum + Math.max(0, Number(batch.unlocated_quantity)),
+        0,
+      );
+      throw badRequest(`此商品尚未上架的庫存只有 ${availableTotal.toLocaleString()}，不足以放入 ${quantity.toLocaleString()}。`);
+    }
+
+    const [slots] = await connection.execute(
+      `SELECT l.location_id, l.zone_code, l.row_no, l.column_no, l.location_code
+       FROM warehouse_locations l
+       WHERE l.warehouse_id = ? AND l.is_active = TRUE
+         AND NOT EXISTS (SELECT 1 FROM batch_locations bl WHERE bl.location_id = l.location_id)
+         AND NOT EXISTS (
+           SELECT 1 FROM inventory_count_sessions cs
+           WHERE cs.warehouse_id = l.warehouse_id AND cs.zone_code = l.zone_code
+             AND cs.status IN ('COUNTING', 'REVIEW')
+         )
+       ORDER BY CASE WHEN l.zone_code = ? THEN 0 ELSE 1 END,
+                l.zone_code, l.row_no, l.column_no
+       FOR UPDATE`,
+      [warehouseId, preferredZoneCode],
+    );
+
+    const allocations = [];
+    let slotIndex = 0;
+    for (const lot of lotPlan) {
+      let lotRemaining = lot.quantity;
+      while (lotRemaining > 0.000001) {
+        const slot = slots[slotIndex++];
+        if (!slot) {
+          throw badRequest(`此倉庫可用空格不足；目前需要 ${slotIndex} 格，請新增格位或減少上架數量。`);
+        }
+        const storedQuantity = Math.min(LOCATION_MAX_CAPACITY_KG, lotRemaining);
+        allocations.push({
+          locationId: Number(slot.location_id),
+          zoneCode: slot.zone_code,
+          locationCode: slot.location_code,
+          batchId: Number(lot.batch.batch_id),
+          batchNo: lot.batch.batch_no,
+          quantity: Math.round(storedQuantity * 100) / 100,
+        });
+        lotRemaining = Math.round((lotRemaining - storedQuantity + Number.EPSILON) * 100) / 100;
+      }
+    }
+
+    for (const allocation of allocations) {
+      await assertZoneNotCountLocked(connection, warehouseId, allocation.zoneCode);
+      await connection.execute(
+        "INSERT INTO batch_locations (location_id, batch_id, quantity) VALUES (?, ?, ?)",
+        [allocation.locationId, allocation.batchId, allocation.quantity],
+      );
+      await connection.execute(
+        `INSERT INTO location_transactions (batch_id, to_location_id, quantity, transaction_type, remark)
+         VALUES (?, ?, ?, 'PUTAWAY', '快速上架（系統自動分配儲位）')`,
+        [allocation.batchId, allocation.locationId, allocation.quantity],
+      );
+    }
+
+    await connection.commit();
+    res.status(201).json({ ok: true, quantity, allocations });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    next(error);
+  } finally {
+    connection?.release();
   }
 });
 
