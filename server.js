@@ -175,21 +175,30 @@ app.get("/api/outbound-orders", async (req, res, next) => {
       `SELECT o.outbound_order_id, o.outbound_no, o.product_id, o.batch_id,
               o.quantity, o.status, o.remark, o.created_at, o.completed_at, o.cancelled_at,
               p.product_name, p.unit, b.batch_no,
-              GROUP_CONCAT(
-                CONCAT(w.warehouse_name, ' · ', l.zone_code, '區 · ', l.location_code,
-                       ' × ', CAST(a.quantity AS CHAR), ' ', p.unit)
-                ORDER BY a.allocation_id SEPARATOR '；'
-              ) AS pick_locations
+              location_summary.pick_locations
        FROM outbound_orders o
        JOIN products p ON p.product_id = o.product_id
        JOIN inventory_batches b ON b.batch_id = o.batch_id
-       LEFT JOIN outbound_order_allocations a ON a.outbound_order_id = o.outbound_order_id
-       LEFT JOIN warehouse_locations l ON l.location_id = a.location_id
-       LEFT JOIN warehouses w ON w.warehouse_id = l.warehouse_id
+       LEFT JOIN (
+         SELECT area_totals.outbound_order_id,
+                GROUP_CONCAT(
+                  CONCAT('倉庫：', area_totals.warehouse_name, '｜區域：', area_totals.zone_code,
+                         '區｜總量：', CAST(area_totals.area_quantity AS CHAR), ' ', area_totals.unit)
+                  ORDER BY area_totals.warehouse_name, area_totals.zone_code SEPARATOR '；'
+                ) AS pick_locations
+         FROM (
+           SELECT a.outbound_order_id, w.warehouse_name, l.zone_code, p2.unit,
+                  SUM(a.quantity) AS area_quantity
+           FROM outbound_order_allocations a
+           JOIN outbound_orders o2 ON o2.outbound_order_id = a.outbound_order_id
+           JOIN products p2 ON p2.product_id = o2.product_id
+           JOIN warehouse_locations l ON l.location_id = a.location_id
+           JOIN warehouses w ON w.warehouse_id = l.warehouse_id
+           GROUP BY a.outbound_order_id, w.warehouse_name, l.zone_code, p2.unit
+         ) area_totals
+         GROUP BY area_totals.outbound_order_id
+       ) location_summary ON location_summary.outbound_order_id = o.outbound_order_id
        WHERE (? = 'ALL' OR o.status = ?)
-       GROUP BY o.outbound_order_id, o.outbound_no, o.product_id, o.batch_id,
-                o.quantity, o.status, o.remark, o.created_at, o.completed_at, o.cancelled_at,
-                p.product_name, p.unit, b.batch_no
        ORDER BY CASE o.status WHEN 'WAITING_PICK' THEN 0 WHEN 'COMPLETED' THEN 1 ELSE 2 END,
                 o.created_at DESC, o.outbound_order_id DESC
        LIMIT 300`,

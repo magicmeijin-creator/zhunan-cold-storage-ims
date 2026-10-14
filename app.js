@@ -857,11 +857,29 @@ async function renderOutboundBatches(productId) {
     const locations = locationResults[index];
     const locatedQuantity = locations.reduce((sum, location) => sum + Number(location.quantity || 0), 0);
     const unlocatedQuantity = Math.max(0, Number(batch.qty) - locatedQuantity);
-    const locationText = locations.map((location) =>
-      `${location.warehouse_name} · ${location.zone_code}區 · ${location.location_code}（${Number(location.quantity).toLocaleString()} ${batch.unit}）`,
-    );
-    if (unlocatedQuantity > 0.000001)
-      locationText.push(`尚未上架（${unlocatedQuantity.toLocaleString()} ${batch.unit}）`);
+    const quantitiesByArea = new Map();
+    locations.forEach((location) => {
+      const key = `${location.warehouse_name}\u0000${location.zone_code}`;
+      const area = quantitiesByArea.get(key) || {
+        warehouse: location.warehouse_name,
+        zone: location.zone_code,
+        quantity: 0,
+      };
+      area.quantity += Number(location.quantity || 0);
+      quantitiesByArea.set(key, area);
+    });
+    const locationLines = [...quantitiesByArea.values()].map((area) => {
+      const line = document.createElement("span");
+      line.className = "block";
+      line.textContent = `倉庫：${area.warehouse}｜區域：${area.zone}區｜總量：${area.quantity.toLocaleString()} ${batch.unit}`;
+      return line;
+    });
+    if (unlocatedQuantity > 0.000001) {
+      const line = document.createElement("span");
+      line.className = "block text-amber-700";
+      line.textContent = `尚未上架｜數量：${unlocatedQuantity.toLocaleString()} ${batch.unit}`;
+      locationLines.push(line);
+    }
 
     const button = document.createElement("button");
     button.type = "button";
@@ -877,7 +895,8 @@ async function renderOutboundBatches(productId) {
     detail.textContent = `進貨 ${batch.inboundDate || "未記錄"} · 效期 ${batch.expiryDate || "未設定"}`;
     const location = document.createElement("span");
     location.className = "mt-1 block text-xs leading-5 text-slate-500";
-    location.textContent = locationText.length ? locationText.join("；") : "尚無倉儲格位資訊";
+    if (locationLines.length) location.append(...locationLines);
+    else location.textContent = "尚無倉儲格位資訊";
     button.append(title, detail, location);
     button.addEventListener("click", () => {
       if (index > 0 && document.getElementById("actionItemId").value !== String(batch.id)) {

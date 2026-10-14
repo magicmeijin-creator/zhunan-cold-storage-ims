@@ -60,7 +60,7 @@ function renderOrder(order) {
   detail.className = "mt-4 grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center";
   const locationBlock = document.createElement("div");
   locationBlock.append(makeText("p", "text-xs font-semibold text-slate-500", "指定取貨位置"));
-  locationBlock.append(makeText("p", "mt-1 text-sm leading-6 text-slate-800", order.pick_locations || "沒有格位分配資料"));
+  locationBlock.append(makeText("p", "mt-1 whitespace-pre-line text-sm leading-6 text-slate-800", order.pick_locations ? order.pick_locations.replace(/；/g, "\n") : "沒有格位分配資料"));
   const quantity = makeText("p", "whitespace-nowrap text-lg font-bold text-slate-900 sm:text-right", `${Number(order.quantity).toLocaleString()} ${order.unit}`);
   detail.append(locationBlock, quantity);
   article.append(header, detail);
