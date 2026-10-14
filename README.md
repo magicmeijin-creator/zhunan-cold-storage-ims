@@ -102,7 +102,15 @@
 2. 安裝 Node.js 18 或更新版本。
 3. 在此資料夾複製 `.env.example` 為 `.env`，填入 MySQL 使用者與密碼。
 4. 在此資料夾執行 `npm install`，再執行 `npm start`。
-5. 開啟 `http://localhost:3000`。可在 `http://localhost:3000/api/health` 查看 API 是否能連上資料庫。
+5. WMS 使用 `http://localhost:3001`。可在 `http://localhost:3001/api/health` 查看 API 是否能連上資料庫。
+
+## 補貨申請與總部 EOS 串接
+
+- 先在 `eos_restock_system` 資料夾啟動總部 EOS（預設 `http://localhost:3000`），再啟動本系統（預設 `http://localhost:3001`）。
+- WMS 的 `.env` 使用 `EOS_API_URL=http://127.0.0.1:3000`；EOS 端以 `WMS_API_URL=http://127.0.0.1:3001` 讀取商品、庫存及出貨資料。
+- 在 WMS 左側選「補貨申請」，系統會預填 WMS 現有可用庫存及 MySQL 中近 7 天已完成出貨量，兩個欄位都可核對後調整；建議與申請數量皆為整數。送出後 EOS 的「總部訂單審核」會收到補貨單。
+- 總部核准補貨單後，EOS 會在 WMS 建立待揀貨出貨單。WMS 直接建立的其他出貨單也會列在 EOS「倉庫出貨紀錄」。
+- 目前 EOS 訂單仍採示範用記憶體資料，重新啟動 EOS 後補貨單會清空；正式使用前需改為資料庫持久保存。
 
 MySQL 使用者需要 `productstock` 資料庫的讀寫權限。不要把 `.env` 或資料庫密碼放進前端 HTML/JavaScript，也不要把 `.env` 提交到版本控制。
 

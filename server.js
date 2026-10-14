@@ -5,7 +5,9 @@ const mysql = require("mysql2/promise");
 const path = require("path");
 
 const app = express();
-const port = Number(process.env.PORT || 3000);
+const port = Number(process.env.PORT || 3001);
+const LOCATION_MAX_CAPACITY_KG = 5;
+const EOS_API_URL = (process.env.EOS_API_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
 const pool = mysql.createPool({
   host: process.env.DB_HOST || "127.0.0.1",
   port: Number(process.env.DB_PORT || 3306),
@@ -53,6 +55,56 @@ app.get("/api/health", async (_req, res) => {
     res
       .status(503)
       .json({ ok: false, message: "無法連線到 MySQL，請檢查資料庫設定。" });
+  }
+});
+
+app.get("/api/products", async (_req, res, next) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT p.product_id, p.product_code, p.product_name AS name, p.category, p.unit, p.min_stock,
+              COALESCE((SELECT SUM(o.quantity)
+                        FROM outbound_orders o
+                        WHERE o.product_id = p.product_id
+                          AND o.status = 'COMPLETED'
+                          AND o.completed_at >= NOW() - INTERVAL 7 DAY), 0) AS recent_sales_7d,
+              (SELECT COUNT(*)
+               FROM outbound_orders o
+               WHERE o.product_id = p.product_id
+                 AND o.status = 'COMPLETED'
+                 AND o.completed_at >= NOW() - INTERVAL 7 DAY) AS recent_sales_order_count
+       FROM products p WHERE p.is_active = TRUE ORDER BY p.product_name, p.product_code`,
+    );
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Proxy the store replenishment workflow through the WMS server so the browser
+// does not need cross-origin access to the separate EOS headquarters server.
+app.get("/api/replenishment/store", async (_req, res, next) => {
+  try {
+    const response = await fetch(`${EOS_API_URL}/api/store?storeId=EOS-ZN-001`, { signal: AbortSignal.timeout(5000) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return res.status(response.status).json({ message: data.error || "總部補貨系統目前無法提供商品資料。" });
+    res.json(data);
+  } catch (error) {
+    res.status(502).json({ message: `無法連線總部補貨系統（${EOS_API_URL}）。請確認 EOS 已啟動。` });
+  }
+});
+
+app.post("/api/replenishment/orders", async (req, res) => {
+  try {
+    const response = await fetch(`${EOS_API_URL}/api/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...req.body, storeId: "EOS-ZN-001", managerConfirmed: true }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = await response.json().catch(() => ({}));
+    res.status(response.status).json(data);
+  } catch (error) {
+    res.status(502).json({ message: `補貨申請未送達總部（${EOS_API_URL}）。請確認 EOS 已啟動後再試。` });
   }
 });
 
@@ -844,6 +896,8 @@ app.post("/api/locations/:id/putaway", async (req, res, next) => {
     );
     if (!batches.length || quantity > Number(batches[0].unlocated) + 0.000001)
       throw badRequest("上架數量超過此批次尚未上架的庫存。");
+    if (quantity > LOCATION_MAX_CAPACITY_KG + 0.000001)
+      throw badRequest(`每個格位最多存放 ${LOCATION_MAX_CAPACITY_KG} 公斤，請調整上架數量或改放其他空格位。`);
     await connection.execute(
       "INSERT INTO batch_locations (location_id, batch_id, quantity) VALUES (?, ?, ?)",
       [locationId, batchId, quantity],
@@ -917,6 +971,9 @@ app.post("/api/locations/:id/move", async (req, res, next) => {
       Number(destinationRows[0].batch_id) !== Number(batchId)
     )
       throw badRequest("目的格位已有其他批次，不能混放。");
+    const destinationQuantity = destinationRows.length ? Number(destinationRows[0].quantity) : 0;
+    if (destinationQuantity + quantity > LOCATION_MAX_CAPACITY_KG + 0.000001)
+      throw badRequest(`移庫後會超過每格 ${LOCATION_MAX_CAPACITY_KG} 公斤上限，請減少移庫數量或選擇其他空格位。`);
 
     const remaining = Number(sourceRows[0].quantity) - quantity;
     if (remaining <= 0.000001)
@@ -1248,6 +1305,8 @@ app.put("/api/count/sessions/:sessionId/lines/:lineId", async (req, res, next) =
         (countedQuantity > 0 && countedBatchId === null) ||
         (countedQuantity === 0 && countedBatchId !== null))
       throw badRequest("請確認實際批次與數量；空格位數量請填 0 並選擇「無庫存」。");
+    if (countedQuantity > LOCATION_MAX_CAPACITY_KG + 0.000001)
+      throw badRequest(`每個格位最多存放 ${LOCATION_MAX_CAPACITY_KG} 公斤，請確認盤點數量或是否需要拆分至其他格位。`);
     const variance =
       Number(lines[0].expected_quantity) !== countedQuantity ||
       Number(lines[0].expected_batch_id || 0) !== Number(countedBatchId || 0);
@@ -1378,6 +1437,8 @@ app.post("/api/count/sessions/:id/apply", async (req, res, next) => {
       const countedBatch = Number(line.counted_batch_id || 0);
       const expectedQuantity = Number(line.expected_quantity || 0);
       const countedQuantity = Number(line.counted_quantity || 0);
+      if (countedQuantity > LOCATION_MAX_CAPACITY_KG + 0.000001)
+        throw badRequest(`格位 ${line.location_code} 盤點數量超過每格 ${LOCATION_MAX_CAPACITY_KG} 公斤上限，無法套用。`);
       if (expectedBatch) deltas.set(expectedBatch, (deltas.get(expectedBatch) || 0) - expectedQuantity);
       if (countedBatch) deltas.set(countedBatch, (deltas.get(countedBatch) || 0) + countedQuantity);
     }

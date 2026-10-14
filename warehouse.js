@@ -89,7 +89,7 @@ function renderMap() {
   const occupied = area.filter((location) => location.batch_id != null).length;
   document.getElementById("mapTitle").textContent = `區域 ${zone} 倉儲格位圖`;
   document.getElementById("mapSummary").textContent =
-    `${area.length} 格 · ${occupied} 格有庫存 · ${area.length - occupied} 格空置`;
+    `${area.length} 格 · 每格上限 5 公斤 · ${occupied} 格有庫存 · ${area.length - occupied} 格空置`;
   renderZoneCarousel(zones);
   grid.className = "overflow-x-auto";
   const board = document.createElement("div");
@@ -113,6 +113,13 @@ function renderMap() {
     name.className = "mt-2 block text-sm font-bold text-slate-800";
     name.textContent = isOccupied ? location.product_name : "空格位";
     button.appendChild(name);
+    const capacity = document.createElement("span");
+    capacity.className = "mt-1 block text-xs font-medium text-slate-500";
+    const storedKg = isOccupied ? Number(location.stored_quantity) : 0;
+    capacity.textContent = storedKg > 5
+      ? `容量 ${storedKg.toLocaleString()} / 5 kg · 超出 ${(storedKg - 5).toLocaleString()} kg`
+      : `容量 ${storedKg.toLocaleString()} / 5 kg · 剩餘 ${(5 - storedKg).toLocaleString()} kg`;
+    button.appendChild(capacity);
     if (isOccupied) {
       const detail = document.createElement("span");
       detail.className = "mt-1 block text-xs leading-5 text-slate-600";
@@ -220,19 +227,18 @@ async function openPutaway(location) {
       select.add(new Option(label, batch.batch_id));
     });
     const selected = batches[0];
+    const quantityInput = document.getElementById("putawayQuantity");
+    const availableCapacity = Math.max(0, 5 - Number(location.stored_quantity || 0));
     document.getElementById("putawayLocation").textContent =
-      `目的格位：${location.location_code}`;
-    document.getElementById("putawayQuantity").max =
-      selected.unlocated_quantity;
-    document.getElementById("putawayQuantity").value =
-      selected.unlocated_quantity;
+      `目的格位：${location.location_code} · 每格上限 5 公斤，尚可放 ${availableCapacity} 公斤`;
+    quantityInput.max = Math.min(Number(selected.unlocated_quantity), availableCapacity);
+    quantityInput.value = quantityInput.max;
     select.onchange = () => {
       const batch = batches.find(
         (item) => String(item.batch_id) === select.value,
       );
-      document.getElementById("putawayQuantity").max = batch.unlocated_quantity;
-      document.getElementById("putawayQuantity").value =
-        batch.unlocated_quantity;
+      quantityInput.max = Math.min(Number(batch.unlocated_quantity), availableCapacity);
+      quantityInput.value = quantityInput.max;
     };
     document.getElementById("putawayForm").dataset.locationId =
       location.location_id;
@@ -244,10 +250,15 @@ async function openPutaway(location) {
 
 async function moveStock(destination) {
   const source = sourceLocation;
+  const remainingCapacity = Math.max(0, 5 - Number(destination.stored_quantity || 0));
+  if (remainingCapacity <= 0) {
+    notify("目的格位已達 5 公斤上限，請選擇其他格位。");
+    return;
+  }
   const quantity = Number(
     window.prompt(
-      `從 ${source.location_code} 移至 ${destination.location_code}。可移動 ${source.stored_quantity} ${source.unit}，請輸入數量：`,
-      source.stored_quantity,
+      `從 ${source.location_code} 移至 ${destination.location_code}。可移動 ${source.stored_quantity} kg，目的格位剩餘 ${remainingCapacity} kg，請輸入數量：`,
+      Math.min(Number(source.stored_quantity), remainingCapacity),
     ),
   );
   if (!Number.isFinite(quantity) || quantity <= 0) return;

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>補貨申請 | 蔬果庫存管理系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>body{font-family:'Noto Sans TC',sans-serif}</style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <header class="sticky top-0 z-20 bg-emerald-800 text-white shadow"><div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:ml-64 lg:max-w-none"><div class="flex items-center gap-3"><button type="button" class="rounded-lg px-3 py-2 hover:bg-white/10 lg:hidden" onclick="toggleSidebar(true)" aria-label="開啟導覽選單" aria-controls="appSidebar"><i class="fa-solid fa-bars"></i></button><div><h1 class="text-xl font-bold"><i class="fa-solid fa-boxes-packing mr-2 text-emerald-200"></i>補貨申請</h1><p class="text-xs text-emerald-100">確認盤點與建議量後，送交總部審核</p></div></div><span id="connectionStatus" class="rounded-full bg-white/10 px-3 py-1 text-xs">連線檢查中</span></div></header>
+  <div id="sidebarBackdrop" class="fixed inset-0 z-30 hidden bg-slate-950/40 lg:hidden" onclick="toggleSidebar(false)"></div>
+  <aside id="appSidebar" class="fixed bottom-0 left-0 top-16 z-40 w-64 -translate-x-full border-r border-slate-200 bg-white p-4 shadow-xl transition-transform lg:translate-x-0 lg:shadow-none" aria-label="主要導覽"><p class="px-3 pb-3 text-xs font-bold uppercase tracking-wider text-slate-400">倉儲管理</p><nav class="space-y-1">
+    <a href="/" class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100"><i class="fa-solid fa-boxes-stacked w-5 text-center"></i>商品進銷存總覽</a>
+    <a href="/warehouse.html" class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100"><i class="fa-solid fa-warehouse w-5 text-center"></i>倉儲地圖</a>
+    <a href="/count.html" class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100"><i class="fa-solid fa-clipboard-check w-5 text-center"></i>盤點</a>
+    <a href="/shipments.html" class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100"><i class="fa-solid fa-truck-fast w-5 text-center"></i>出貨單</a>
+    <a href="/replenishment.html" aria-current="page" class="flex items-center gap-3 rounded-lg bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-800"><i class="fa-solid fa-boxes-packing w-5 text-center"></i>補貨申請</a>
+    <a href="/records.html" class="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100"><i class="fa-solid fa-clock-rotate-left w-5 text-center"></i>紀錄查詢</a>
+  </nav><div class="mt-6 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">系統依近 7 日銷量、盤點量及補貨參數計算建議，送出後由總部審核。</div></aside>
+  <main class="mx-auto max-w-7xl space-y-5 px-4 py-6 lg:ml-64 lg:mx-0 lg:max-w-none">
+    <section class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900"><strong>申請流程</strong><p>輸入門市近 7 日銷量並核對實際庫存，系統會預填建議補貨量。送出後，補貨單會立即出現在總部 EOS 的「總部訂單審核」；總部核准後才建立倉庫待揀貨單。</p></section>
+    <section class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4"><div><h2 class="font-bold">竹南冷凍商店商品</h2><p class="mt-1 text-xs text-slate-500">安全庫存參考商品最低庫存；交期與檢視頻率目前採 1 天示範值。</p></div><button id="reloadButton" type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"><i class="fa-solid fa-rotate mr-1"></i>重新載入</button></div>
+      <div id="errorBox" class="hidden m-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"></div>
+      <form id="requestForm"><div id="productList" class="divide-y divide-slate-100"></div><div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-4"><p class="text-xs text-slate-500">僅勾選要申請的商品；若調整建議量，請填寫原因。</p><button id="submitButton" type="submit" disabled class="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"><i class="fa-solid fa-paper-plane mr-2"></i>送出補貨申請</button></div></form>
+      <div id="emptyState" class="hidden p-10 text-center text-sm text-slate-500">總部尚未提供商品資料，請確認兩個系統都已啟動後重新載入。</div>
+    </section>
+    <section id="successBox" class="hidden rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900" role="status"></section>
+  </main>
+  <div id="toast" class="fixed bottom-5 left-1/2 z-50 hidden -translate-x-1/2 rounded-lg bg-slate-900 px-4 py-3 text-sm text-white shadow-lg" role="status"></div>
+  <script src="/navigation.js" defer></script><script src="/replenishment.js" defer></script>
+</body>
+</html>

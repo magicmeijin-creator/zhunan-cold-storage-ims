@@ -261,8 +261,13 @@ function renderWarehouseOverview() {
       if (hasStock) {
         const quantity = document.createElement("span");
         quantity.className = "mt-1 text-[10px] text-slate-600";
-        quantity.textContent = `${Number(location.stored_quantity).toLocaleString()} ${location.unit}`;
+        quantity.textContent = `${Number(location.stored_quantity).toLocaleString()} ${location.unit} / 5 kg`;
         button.appendChild(quantity);
+      } else {
+        const capacity = document.createElement("span");
+        capacity.className = "mt-1 text-[10px] text-slate-500";
+        capacity.textContent = "上限 5 kg";
+        button.appendChild(capacity);
       }
       button.addEventListener("pointerenter", (event) => {
         showOverviewTooltip(location, event.clientX, event.clientY);
