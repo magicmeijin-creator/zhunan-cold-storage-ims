@@ -779,7 +779,7 @@ function openActionModal(id, type) {
     document.getElementById("outboundConfirmWrap").classList.remove("hidden");
     document.getElementById("outboundConfirmCheck").checked = false;
     document.getElementById("outboundConfirmCheck").disabled = true;
-    document.getElementById("actionModalTitle").textContent = "蔬果銷售 / 出庫登記";
+    document.getElementById("actionModalTitle").textContent = "商品出庫登記";
     document.getElementById("actionSubmitBtn").textContent = "建立出貨單並預留庫存";
     document.getElementById("actionQtyLabel").textContent = "出貨數量";
     openModal("actionModal");
@@ -803,7 +803,7 @@ function openActionModal(id, type) {
   document.getElementById("actionQtyInput").max = selectedItem.qty;
   document.getElementById("actionNoteInput").value = "";
   document.getElementById("actionModalTitle").textContent =
-    type === "deduct" ? "蔬果銷售 / 出庫登記" : "蔬果損耗 / 報廢登記";
+    type === "deduct" ? "商品出庫登記" : "商品損耗 / 報廢登記";
   document.getElementById("actionSubmitBtn").textContent =
     type === "deduct" ? "建立出貨單並預留庫存" : "確認報廢";
   document.getElementById("actionQtyLabel").textContent = `${type === "deduct" ? "出貨" : "報廢"}數量 (${selectedItem.unit})`;

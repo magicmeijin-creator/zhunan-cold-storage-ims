@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>竹南蔬果冷凍庫存管理系統</title>
+    <title>統家便利商店庫存管理系統</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons CDN -->
@@ -61,10 +61,10 @@
           </div>
           <div>
             <h1 class="text-xl font-bold tracking-wide flex items-center gap-2">
-              竹南蔬果冷凍庫存管理系統
+              統家便利商店庫存管理系統
               <span
                 class="text-xs bg-emerald-800/80 text-emerald-100 px-2.5 py-0.5 rounded-full font-normal border border-emerald-500/30"
-                >蔬果專用版</span
+                >零售庫存版</span
               >
             </h1>
           </div>
@@ -76,7 +76,7 @@
             class="bg-amber-400 hover:bg-amber-500 text-slate-900 font-semibold px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2 text-sm"
           >
             <i class="fa-solid fa-plus text-base"></i>
-            <span>新增蔬果進貨</span>
+            <span>新增商品進貨</span>
           </button>
           <button
             type="button"
@@ -170,7 +170,7 @@
               >
             </h3>
             <p id="urgentAlertText" class="text-sm text-slate-600 mt-0.5">
-              目前有部分蔬果即將到期或已過期，請優先安排促銷出清或報廢處理。
+              目前有部分商品即將到期或已過期，請優先安排促銷出清或報廢處理。
             </p>
           </div>
         </div>
@@ -193,7 +193,7 @@
             <p
               class="text-xs font-medium text-slate-500 uppercase tracking-wider"
             >
-              在庫蔬果品項
+              在庫商品品項
             </p>
             <h3
               id="statTotalItems"
@@ -299,7 +299,7 @@
               type="text"
               id="searchInput"
               oninput="applyFilters()"
-              placeholder="搜尋蔬果名稱、產地、供應商..."
+              placeholder="搜尋商品名稱、產地、供應商..."
               class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
             />
           </div>
@@ -326,7 +326,7 @@
           class="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100 scrollbar-thin"
         >
           <span class="text-xs font-semibold text-slate-400 shrink-0 mr-1"
-            >蔬果分類：</span
+            >商品分類：</span
           >
           <button
             onclick="selectCategory('all')"
@@ -399,7 +399,7 @@
               class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200"
             >
               <tr>
-                <th class="py-3 px-4" data-sort-header="name" aria-sort="none"><button type="button" data-sort-key="name" class="inline-flex items-center gap-1 hover:text-emerald-700">蔬果品名 / 分類<i data-sort-icon="name" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
+                <th class="py-3 px-4" data-sort-header="name" aria-sort="none"><button type="button" data-sort-key="name" class="inline-flex items-center gap-1 hover:text-emerald-700">商品名稱 / 分類<i data-sort-icon="name" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
                 <th class="py-3 px-4" data-sort-header="supplier" aria-sort="none"><button type="button" data-sort-key="supplier" class="inline-flex items-center gap-1 hover:text-emerald-700">供應商<i data-sort-icon="supplier" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
                 <th class="py-3 px-4" data-sort-header="inboundDate" aria-sort="none"><button type="button" data-sort-key="inboundDate" class="inline-flex items-center gap-1 hover:text-emerald-700">進貨日期<i data-sort-icon="inboundDate" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
                 <th class="py-3 px-4" data-sort-header="receivedAt" aria-sort="none"><button type="button" data-sort-key="receivedAt" class="inline-flex items-center gap-1 hover:text-emerald-700">紀錄時間<i data-sort-icon="receivedAt" class="fa-solid fa-sort text-slate-400" aria-hidden="true"></i></button></th>
@@ -424,7 +424,7 @@
             <i class="fa-solid fa-basket-shopping"></i>
           </div>
           <h3 class="font-bold text-slate-700 text-base">
-            未找到符合條件的蔬果
+            未找到符合條件的商品
           </h3>
           <p class="text-slate-500 text-sm mt-1">
             請嘗試調整搜尋關鍵字或篩選條件。
@@ -485,7 +485,7 @@
         >
           <h3 class="font-bold text-lg flex items-center gap-2">
             <i class="fa-solid fa-cart-flatbed"></i>
-            登錄蔬果進貨
+            登錄商品進貨
           </h3>
           <button
             onclick="closeModal('addModal')"
@@ -504,13 +504,13 @@
             <!-- Name -->
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1"
-                >蔬果名稱 <span class="text-red-500">*</span></label
+                >商品名稱 <span class="text-red-500">*</span></label
               >
               <input
                 type="text"
                 id="addName"
                 required
-                placeholder="例如：有機牛番茄、有機高麗菜"
+                placeholder="例如：瓶裝水、鮮奶吐司、餅乾"
                 class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
               />
             </div>
@@ -518,7 +518,7 @@
             <!-- Category -->
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1"
-                >蔬果分類 <span class="text-red-500">*</span></label
+                >商品分類 <span class="text-red-500">*</span></label
               >
               <select
                 id="addCategory"

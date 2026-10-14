@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>補貨申請 | 蔬果庫存管理系統</title>
+  <title>補貨申請 | 統家便利商店庫存管理系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -23,7 +23,7 @@
   <main class="mx-auto max-w-7xl space-y-5 px-4 py-6 lg:ml-64 lg:mx-0 lg:max-w-none">
     <section class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900"><strong>申請流程</strong><p>輸入門市近 7 日銷量並核對實際庫存，系統會預填建議補貨量。送出後，補貨單會立即出現在總部 EOS 的「總部訂單審核」；總部核准後才建立倉庫待揀貨單。</p></section>
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4"><div><h2 class="font-bold">竹南冷凍商店商品</h2><p class="mt-1 text-xs text-slate-500">安全庫存參考商品最低庫存；交期與檢視頻率目前採 1 天示範值。</p></div><button id="reloadButton" type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"><i class="fa-solid fa-rotate mr-1"></i>重新載入</button></div>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4"><div><h2 class="font-bold">統家便利商店商品</h2><p class="mt-1 text-xs text-slate-500">安全庫存參考商品最低庫存；交期與檢視頻率目前採 1 天示範值。</p></div><button id="reloadButton" type="button" class="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"><i class="fa-solid fa-rotate mr-1"></i>重新載入</button></div>
       <div id="errorBox" class="hidden m-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"></div>
       <form id="requestForm"><div id="productList" class="divide-y divide-slate-100"></div><div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-4"><p class="text-xs text-slate-500">僅勾選要申請的商品；若調整建議量，請填寫原因。</p><button id="submitButton" type="submit" disabled class="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"><i class="fa-solid fa-paper-plane mr-2"></i>送出補貨申請</button></div></form>
       <div id="emptyState" class="hidden p-10 text-center text-sm text-slate-500">總部尚未提供商品資料，請確認兩個系統都已啟動後重新載入。</div>
